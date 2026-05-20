@@ -9,38 +9,193 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StatisticheRouteImport } from './routes/statistiche'
+import { Route as ClassificaRouteImport } from './routes/classifica'
+import { Route as CalendarioRouteImport } from './routes/calendario'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SquadreIndexRouteImport } from './routes/squadre.index'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as SquadreTeamIdRouteImport } from './routes/squadre.$teamId'
+import { Route as GiocatoriPlayerIdRouteImport } from './routes/giocatori.$playerId'
+import { Route as AdminPartitaRouteImport } from './routes/admin.partita'
+import { Route as AdminImportRouteImport } from './routes/admin.import'
+import { Route as AdminCalendarioRouteImport } from './routes/admin.calendario'
 
+const StatisticheRoute = StatisticheRouteImport.update({
+  id: '/statistiche',
+  path: '/statistiche',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClassificaRoute = ClassificaRouteImport.update({
+  id: '/classifica',
+  path: '/classifica',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalendarioRoute = CalendarioRouteImport.update({
+  id: '/calendario',
+  path: '/calendario',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SquadreIndexRoute = SquadreIndexRouteImport.update({
+  id: '/squadre/',
+  path: '/squadre/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SquadreTeamIdRoute = SquadreTeamIdRouteImport.update({
+  id: '/squadre/$teamId',
+  path: '/squadre/$teamId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GiocatoriPlayerIdRoute = GiocatoriPlayerIdRouteImport.update({
+  id: '/giocatori/$playerId',
+  path: '/giocatori/$playerId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPartitaRoute = AdminPartitaRouteImport.update({
+  id: '/admin/partita',
+  path: '/admin/partita',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminImportRoute = AdminImportRouteImport.update({
+  id: '/admin/import',
+  path: '/admin/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminCalendarioRoute = AdminCalendarioRouteImport.update({
+  id: '/admin/calendario',
+  path: '/admin/calendario',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/calendario': typeof CalendarioRoute
+  '/classifica': typeof ClassificaRoute
+  '/statistiche': typeof StatisticheRoute
+  '/admin/calendario': typeof AdminCalendarioRoute
+  '/admin/import': typeof AdminImportRoute
+  '/admin/partita': typeof AdminPartitaRoute
+  '/giocatori/$playerId': typeof GiocatoriPlayerIdRoute
+  '/squadre/$teamId': typeof SquadreTeamIdRoute
+  '/admin/': typeof AdminIndexRoute
+  '/squadre/': typeof SquadreIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/calendario': typeof CalendarioRoute
+  '/classifica': typeof ClassificaRoute
+  '/statistiche': typeof StatisticheRoute
+  '/admin/calendario': typeof AdminCalendarioRoute
+  '/admin/import': typeof AdminImportRoute
+  '/admin/partita': typeof AdminPartitaRoute
+  '/giocatori/$playerId': typeof GiocatoriPlayerIdRoute
+  '/squadre/$teamId': typeof SquadreTeamIdRoute
+  '/admin': typeof AdminIndexRoute
+  '/squadre': typeof SquadreIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/calendario': typeof CalendarioRoute
+  '/classifica': typeof ClassificaRoute
+  '/statistiche': typeof StatisticheRoute
+  '/admin/calendario': typeof AdminCalendarioRoute
+  '/admin/import': typeof AdminImportRoute
+  '/admin/partita': typeof AdminPartitaRoute
+  '/giocatori/$playerId': typeof GiocatoriPlayerIdRoute
+  '/squadre/$teamId': typeof SquadreTeamIdRoute
+  '/admin/': typeof AdminIndexRoute
+  '/squadre/': typeof SquadreIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/calendario'
+    | '/classifica'
+    | '/statistiche'
+    | '/admin/calendario'
+    | '/admin/import'
+    | '/admin/partita'
+    | '/giocatori/$playerId'
+    | '/squadre/$teamId'
+    | '/admin/'
+    | '/squadre/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/calendario'
+    | '/classifica'
+    | '/statistiche'
+    | '/admin/calendario'
+    | '/admin/import'
+    | '/admin/partita'
+    | '/giocatori/$playerId'
+    | '/squadre/$teamId'
+    | '/admin'
+    | '/squadre'
+  id:
+    | '__root__'
+    | '/'
+    | '/calendario'
+    | '/classifica'
+    | '/statistiche'
+    | '/admin/calendario'
+    | '/admin/import'
+    | '/admin/partita'
+    | '/giocatori/$playerId'
+    | '/squadre/$teamId'
+    | '/admin/'
+    | '/squadre/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CalendarioRoute: typeof CalendarioRoute
+  ClassificaRoute: typeof ClassificaRoute
+  StatisticheRoute: typeof StatisticheRoute
+  AdminCalendarioRoute: typeof AdminCalendarioRoute
+  AdminImportRoute: typeof AdminImportRoute
+  AdminPartitaRoute: typeof AdminPartitaRoute
+  GiocatoriPlayerIdRoute: typeof GiocatoriPlayerIdRoute
+  SquadreTeamIdRoute: typeof SquadreTeamIdRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+  SquadreIndexRoute: typeof SquadreIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/statistiche': {
+      id: '/statistiche'
+      path: '/statistiche'
+      fullPath: '/statistiche'
+      preLoaderRoute: typeof StatisticheRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/classifica': {
+      id: '/classifica'
+      path: '/classifica'
+      fullPath: '/classifica'
+      preLoaderRoute: typeof ClassificaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calendario': {
+      id: '/calendario'
+      path: '/calendario'
+      fullPath: '/calendario'
+      preLoaderRoute: typeof CalendarioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +203,70 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/squadre/': {
+      id: '/squadre/'
+      path: '/squadre'
+      fullPath: '/squadre/'
+      preLoaderRoute: typeof SquadreIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/squadre/$teamId': {
+      id: '/squadre/$teamId'
+      path: '/squadre/$teamId'
+      fullPath: '/squadre/$teamId'
+      preLoaderRoute: typeof SquadreTeamIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/giocatori/$playerId': {
+      id: '/giocatori/$playerId'
+      path: '/giocatori/$playerId'
+      fullPath: '/giocatori/$playerId'
+      preLoaderRoute: typeof GiocatoriPlayerIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/partita': {
+      id: '/admin/partita'
+      path: '/admin/partita'
+      fullPath: '/admin/partita'
+      preLoaderRoute: typeof AdminPartitaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/import': {
+      id: '/admin/import'
+      path: '/admin/import'
+      fullPath: '/admin/import'
+      preLoaderRoute: typeof AdminImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/calendario': {
+      id: '/admin/calendario'
+      path: '/admin/calendario'
+      fullPath: '/admin/calendario'
+      preLoaderRoute: typeof AdminCalendarioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CalendarioRoute: CalendarioRoute,
+  ClassificaRoute: ClassificaRoute,
+  StatisticheRoute: StatisticheRoute,
+  AdminCalendarioRoute: AdminCalendarioRoute,
+  AdminImportRoute: AdminImportRoute,
+  AdminPartitaRoute: AdminPartitaRoute,
+  GiocatoriPlayerIdRoute: GiocatoriPlayerIdRoute,
+  SquadreTeamIdRoute: SquadreTeamIdRoute,
+  AdminIndexRoute: AdminIndexRoute,
+  SquadreIndexRoute: SquadreIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
