@@ -71,15 +71,17 @@ function HomePage() {
         <div>
           <SectionHeader title="Top 5 marcatori" link="/statistiche" />
           <div className="rounded-xl border bg-card overflow-hidden">
-            {scorers.map((p, i) => (
-              <Link to="/giocatori/$playerId" params={{ playerId: p.id }} key={p.id} className="flex items-center gap-3 px-3 py-2.5 border-b last:border-0 hover:bg-secondary/50">
+            {scorers.length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center py-6">Nessun goal ancora.</div>
+            ) : scorers.map((row, i) => (
+              <Link to="/giocatori/$playerId" params={{ playerId: row.player.id }} key={row.player.id} className="flex items-center gap-3 px-3 py-2.5 border-b last:border-0 hover:bg-secondary/50">
                 <span className="w-6 text-center font-bold text-muted-foreground text-sm">{i + 1}</span>
-                <TeamBadge teamId={p.teamId} size={24} />
+                <TeamBadge teamId={row.player.teamId} size={24} />
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold truncate text-sm">{p.name}</div>
-                  <div className="text-xs text-muted-foreground">{getTeam(p.teamId)?.shortName}</div>
+                  <div className="font-semibold truncate text-sm">{row.player.name}</div>
+                  <div className="text-xs text-muted-foreground">{getTeam(row.player.teamId)?.shortName}</div>
                 </div>
-                <span className="font-bold tabular-nums text-accent flex items-center gap-1"><Zap className="w-3.5 h-3.5" />{p.goals}</span>
+                <span className="font-bold tabular-nums text-accent flex items-center gap-1"><Zap className="w-3.5 h-3.5" />{row.goals}</span>
               </Link>
             ))}
           </div>
