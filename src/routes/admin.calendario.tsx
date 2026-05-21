@@ -28,15 +28,17 @@ function AdminCalendario() {
         </div>
         {matches.map(m => {
           const date = new Date(m.date);
+          const homeName = m.homeTeamId ? getTeam(m.homeTeamId)?.shortName : m.homeLabel ?? "—";
+          const awayName = m.awayTeamId ? getTeam(m.awayTeamId)?.shortName : m.awayLabel ?? "—";
           return (
             <div key={m.id} className="grid sm:grid-cols-[60px_1fr_140px_100px_80px] gap-3 items-center px-4 py-3 border-t hover:bg-secondary/30">
               <div className="text-xs"><span className="bg-secondary px-2 py-0.5 rounded font-bold">G{m.matchday}</span></div>
               <div className="flex items-center gap-2 min-w-0">
-                <TeamBadge teamId={m.homeTeamId} size={24} />
-                <span className="text-sm font-semibold truncate">{getTeam(m.homeTeamId)?.shortName}</span>
+                {m.homeTeamId ? <TeamBadge teamId={m.homeTeamId} size={24} /> : <span className="w-6 h-6 rounded bg-secondary" />}
+                <span className="text-sm font-semibold truncate">{homeName}</span>
                 <span className="text-muted-foreground text-xs">vs</span>
-                <span className="text-sm font-semibold truncate">{getTeam(m.awayTeamId)?.shortName}</span>
-                <TeamBadge teamId={m.awayTeamId} size={24} />
+                <span className="text-sm font-semibold truncate">{awayName}</span>
+                {m.awayTeamId ? <TeamBadge teamId={m.awayTeamId} size={24} /> : <span className="w-6 h-6 rounded bg-secondary" />}
               </div>
               <div className="text-xs text-muted-foreground tabular-nums">
                 {date.toLocaleDateString("it-IT", { day: "2-digit", month: "short" })} · {date.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}
@@ -56,11 +58,12 @@ function AdminCalendario() {
   );
 }
 
-function StatusBadge({ status }: { status: "scheduled" | "live" | "finished" }) {
+function StatusBadge({ status }: { status: "scheduled" | "live" | "finished" | "locked" }) {
   const map = {
     scheduled: { label: "Programmata", cls: "bg-secondary text-muted-foreground" },
     live: { label: "LIVE", cls: "bg-live text-live-foreground live-pulse" },
     finished: { label: "Finita", cls: "bg-success/15 text-success" },
+    locked: { label: "Bloccata", cls: "bg-muted text-muted-foreground" },
   };
   const s = map[status];
   return <span className={`inline-block text-[10px] font-bold uppercase px-2 py-1 rounded ${s.cls}`}>{s.label}</span>;

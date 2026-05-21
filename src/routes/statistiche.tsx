@@ -11,7 +11,9 @@ export const Route = createFileRoute("/statistiche")({
 
 function StatsPage() {
   const [tab, setTab] = useState<"scorers" | "keepers">("scorers");
-  const list = tab === "scorers" ? topScorers(20) : topCleanSheets(20);
+  const rows = tab === "scorers"
+    ? topScorers(20).map(r => ({ player: r.player, value: r.goals }))
+    : topCleanSheets(20).map(r => ({ player: r.player, value: r.cleanSheets }));
 
   return (
     <AppShell>
@@ -28,22 +30,24 @@ function StatsPage() {
           <span>Giocatore</span>
           <span>{tab === "scorers" ? "Goal" : "CS"}</span>
         </div>
-        {list.map((p, i) => (
+        {rows.length === 0 ? (
+          <div className="text-sm text-muted-foreground text-center py-8">Nessun dato disponibile.</div>
+        ) : rows.map((r, i) => (
           <Link
             to="/giocatori/$playerId"
-            params={{ playerId: p.id }}
-            key={p.id}
+            params={{ playerId: r.player.id }}
+            key={r.player.id}
             className="grid grid-cols-[24px_1fr_auto] gap-3 items-center px-3 py-2.5 border-t hover:bg-secondary/30"
           >
             <span className="text-sm font-bold text-muted-foreground text-center">{i + 1}</span>
             <div className="flex items-center gap-2.5 min-w-0">
-              <TeamBadge teamId={p.teamId} size={28} />
+              <TeamBadge teamId={r.player.teamId} size={28} />
               <div className="min-w-0">
-                <div className="font-semibold truncate text-sm">{p.name}</div>
-                <div className="text-xs text-muted-foreground">{getTeam(p.teamId)?.name}</div>
+                <div className="font-semibold truncate text-sm">{r.player.name}</div>
+                <div className="text-xs text-muted-foreground">{getTeam(r.player.teamId)?.name}</div>
               </div>
             </div>
-            <span className="font-bold tabular-nums text-primary text-lg">{tab === "scorers" ? p.goals : p.cleanSheets}</span>
+            <span className="font-bold tabular-nums text-primary text-lg">{r.value}</span>
           </Link>
         ))}
       </div>
