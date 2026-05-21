@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+// no-op import removed
 import { Match, getTeam, phaseShort, phaseLabel } from "@/lib/mockData";
 import { TeamBadge } from "./TeamBadge";
 import { Lock } from "lucide-react";
