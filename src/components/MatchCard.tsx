@@ -66,14 +66,7 @@ export function MatchCard({ match, compact = false }: { match: Match; compact?: 
       {match.highlight && (
         <div className="mt-2 text-xs font-bold text-accent uppercase tracking-wide">{match.highlight}</div>
       )}
-      {(home && away && match.id) && (home.id && away.id) && match.homeTeamId && match.awayTeamId && match.status !== "locked" && (
-        <Link
-          to="/squadre/$teamId"
-          params={{ teamId: home.id }}
-          className="sr-only"
-          aria-label={`Vai a ${home.name}`}
-        >.</Link>
-      )}
     </div>
   );
 }
+
