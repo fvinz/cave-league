@@ -15,7 +15,11 @@ function HomePage() {
   const standings = computeStandings().slice(0, 5);
   const scorers = topScorers(5);
   const today = matchesOnDay(TOURNAMENT_TODAY);
-  const featured = matches.find(m => m.status === "live") ?? matches.find(m => m.highlight) ?? matches[0];
+  const featured =
+    matches.find(m => m.status === "live") ??
+    matches.find(m => m.status === "scheduled" && m.highlight) ??
+    matches.find(m => m.status === "finished" && m.highlight) ??
+    matches[0];
 
   return (
     <AppShell>
