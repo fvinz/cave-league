@@ -4,18 +4,26 @@ import { toast } from "sonner";
 import { AdminShell } from "@/components/AdminShell";
 import { TeamBadge } from "@/components/TeamBadge";
 import {
-  matches as initialMatches,
+  matches as allMatches,
   getTeam,
   getTeamPlayers,
   phaseLabel,
   phaseShort,
-  type Match,
-  type MatchEvent,
+  useStoreVersion,
+  addMatchEvent,
+  undoLastEvent,
+  setMatchStatus,
+  reopenMatch,
+  resetMatch,
+  finalizeMatch,
+  lockMatch,
+  unlockMatch,
+  recomputeAll,
   type MatchStatus,
 } from "@/lib/mockData";
 import {
   Play, Pause, Square, Plus, Undo2, Trophy, Goal, Shield,
-  RotateCcw, Lock, X, CheckCircle2,
+  RotateCcw, Lock, Unlock, X, CheckCircle2, RefreshCw,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/partita")({
@@ -23,121 +31,132 @@ export const Route = createFileRoute("/admin/partita")({
   head: () => ({ meta: [{ title: "Gestione partita — Admin" }] }),
 });
 
-type AdminEvent = MatchEvent & { id: string; weight: number; label: string };
-type MatchState = {
-  homeScore: number;
-  awayScore: number;
-  status: MatchStatus;
-  events: AdminEvent[];
-  clock: number; // minutes elapsed (mock)
-  shootoutWinner?: "home" | "away";
-};
-
 const QUICK = [
-  { type: "goal" as const, label: "Goal", icon: Goal, weight: 1, color: "bg-primary text-primary-foreground" },
-  { type: "goal" as const, label: "Goal x2", icon: Goal, weight: 2, color: "bg-accent text-accent-foreground" },
-  { type: "own_goal" as const, label: "Autogoal", icon: Shield, weight: 1, color: "bg-destructive/90 text-destructive-foreground" },
+  { type: "goal" as const, label: "Goal", icon: Goal, weight: 1 as 1, color: "bg-primary text-primary-foreground" },
+  { type: "goal" as const, label: "Goal x2", icon: Goal, weight: 2 as 2, color: "bg-accent text-accent-foreground" },
+  { type: "own_goal" as const, label: "Autogoal", icon: Shield, weight: 1 as 1, color: "bg-destructive/90 text-destructive-foreground" },
 ];
 
 function AdminPartita() {
-  // pool of selectable matches (regular + knockout già abbinati)
+  useStoreVersion(); // re-render on any store change
+
+  // pool of selectable matches (con squadre definite, non lockate per default)
   const playable = useMemo(
-    () => initialMatches.filter(m => m.homeTeamId && m.awayTeamId && m.status !== "locked"),
+    () => allMatches.filter(m => m.homeTeamId && m.awayTeamId),
     [],
   );
-  const initial = playable.find(m => m.status === "live") ?? playable.find(m => m.status === "scheduled") ?? playable[0];
+  const initial =
+    playable.find(m => m.status === "live") ??
+    playable.find(m => m.status === "scheduled") ??
+    playable[0];
 
   const [selectedId, setSelectedId] = useState(initial.id);
-  const match = playable.find(m => m.id === selectedId)!;
+  const match = playable.find(m => m.id === selectedId) ?? initial;
 
-  const [state, setState] = useState<MatchState>(initFromMatch(match));
   const [activeSide, setActiveSide] = useState<"home" | "away">("home");
-  const [pickerEvent, setPickerEvent] = useState<{ side: "home" | "away"; type: "goal" | "own_goal"; weight: number; label: string } | null>(null);
+  const [clock, setClock] = useState<number>(match.status === "live" ? 25 : 0);
+  const [pickerEvent, setPickerEvent] = useState<
+    { side: "home" | "away"; type: "goal" | "own_goal"; weight: 1 | 2; label: string } | null
+  >(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmLock, setConfirmLock] = useState(false);
 
   const home = getTeam(match.homeTeamId)!;
   const away = getTeam(match.awayTeamId)!;
+  const isLocked = match.status === "locked";
+  const isFinished = match.status === "finished";
+  const homeScore = match.homeScore ?? 0;
+  const awayScore = match.awayScore ?? 0;
+  const tied = homeScore === awayScore;
 
   const switchMatch = (id: string) => {
     setSelectedId(id);
-    setState(initFromMatch(playable.find(m => m.id === id)!));
+    const m = playable.find(x => x.id === id)!;
+    setClock(m.status === "live" ? 25 : 0);
   };
 
-  const start = () => {
-    setState(s => ({ ...s, status: "live" }));
+  const guard = (action: () => void) => {
+    if (isLocked) { toast.error("Partita bloccata", { description: "Sbloccala per modificare." }); return; }
+    action();
+  };
+
+  const start = () => guard(() => {
+    setMatchStatus(match.id, "live");
     toast.success("Partita avviata", { description: `${home.shortName} vs ${away.shortName}` });
-  };
+  });
 
-  const togglePause = () => setState(s => ({ ...s, status: s.status === "live" ? "scheduled" : "live" }));
+  const togglePause = () => guard(() => {
+    setMatchStatus(match.id, match.status === "live" ? "scheduled" : "live");
+  });
 
-  const reset = () => {
-    setState(initFromMatch(match));
-    toast.info("Stato partita resettato");
-  };
+  const doReset = () => guard(() => {
+    if (resetMatch(match.id)) toast.info("Partita resettata");
+  });
 
-  const recordEvent = (playerId: string) => {
+  const doReopen = () => guard(() => {
+    if (reopenMatch(match.id)) toast.info("Partita riaperta");
+  });
+
+  const onPickPlayer = (playerId: string) => {
     if (!pickerEvent) return;
-    const { side, type, weight, label } = pickerEvent;
-    // autogoal → punto va all'altra squadra
-    const scoringSide = type === "own_goal" ? (side === "home" ? "away" : "home") : side;
-    const ev: AdminEvent = {
-      id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      minute: state.clock || 1,
-      team: side,
-      type,
+    const res = addMatchEvent(match.id, {
+      team: pickerEvent.side,
+      type: pickerEvent.type,
       playerId,
-      weight,
-      label,
-    };
-    setState(s => ({
-      ...s,
-      homeScore: scoringSide === "home" ? s.homeScore + weight : s.homeScore,
-      awayScore: scoringSide === "away" ? s.awayScore + weight : s.awayScore,
-      events: [ev, ...s.events],
-    }));
+      weight: pickerEvent.weight,
+      minute: clock || 1,
+      label: pickerEvent.label,
+    });
+    if (!res.ok) toast.error(res.error);
+    else toast.success(`${pickerEvent.label} registrato`, {
+      description: `${(pickerEvent.side === "home" ? home : away).shortName} · ${getPlayerName(playerId)}`,
+    });
     setPickerEvent(null);
-    toast.success(`${label} registrato`, { description: `${getTeam(side === "home" ? home.id : away.id)?.shortName} · ${getPlayerName(playerId)}` });
   };
 
   const undo = () => {
-    setState(s => {
-      if (s.events.length === 0) return s;
-      const [last, ...rest] = s.events;
-      const scoringSide = last.type === "own_goal" ? (last.team === "home" ? "away" : "home") : last.team;
-      return {
-        ...s,
-        events: rest,
-        homeScore: scoringSide === "home" ? Math.max(0, s.homeScore - last.weight) : s.homeScore,
-        awayScore: scoringSide === "away" ? Math.max(0, s.awayScore - last.weight) : s.awayScore,
-      };
-    });
-    toast.info("Ultima azione annullata");
+    if (undoLastEvent(match.id)) toast.info("Ultima azione annullata");
   };
 
-  const bumpClock = (delta: number) => setState(s => ({ ...s, clock: Math.max(0, Math.min(50, s.clock + delta)) }));
+  const bumpClock = (delta: number) => setClock(c => Math.max(0, Math.min(50, c + delta)));
 
   const finishDirect = () => {
-    setState(s => ({ ...s, status: "finished", shootoutWinner: undefined }));
+    const res = finalizeMatch(match.id, { type: "direct" });
+    if (!res.ok) { toast.error(res.error); return; }
     setConfirmClose(false);
-    toast.success("Partita chiusa", { description: `${state.homeScore} - ${state.awayScore}` });
+    toast.success("Partita chiusa", { description: `${homeScore} - ${awayScore}` });
   };
 
   const finishShootout = (winner: "home" | "away") => {
-    setState(s => ({ ...s, status: "finished", shootoutWinner: winner }));
+    const res = finalizeMatch(match.id, { type: "shootout", winner });
+    if (!res.ok) { toast.error(res.error); return; }
     setConfirmClose(false);
     toast.success(`Vittoria ai rigori: ${winner === "home" ? home.shortName : away.shortName}`);
   };
 
-  const tied = state.homeScore === state.awayScore;
+  const doLock = () => {
+    if (lockMatch(match.id)) toast.success("Partita bloccata", { description: "Risultato definitivo." });
+    setConfirmLock(false);
+  };
+
+  const doUnlock = () => {
+    if (unlockMatch(match.id)) toast.info("Partita sbloccata");
+  };
 
   return (
     <AdminShell>
-      {/* Match picker */}
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-black">Gestione partita</h1>
-          <p className="text-sm text-muted-foreground">UX rapida da bordo campo. Mock — nessuna scrittura backend.</p>
+          <p className="text-sm text-muted-foreground">Gli eventi aggiornano in tempo reale classifica, marcatori e statistiche.</p>
         </div>
+        <button
+          onClick={() => { recomputeAll(); toast.success("Tutti i dati derivati ricalcolati."); }}
+          className="shrink-0 px-3 py-2 rounded-lg border bg-card text-xs font-bold flex items-center gap-1.5 hover:bg-secondary/50"
+          title="Forza ricalcolo classifica e statistiche"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> Ricalcola tutto
+        </button>
       </div>
 
       <label className="block mb-4">
@@ -149,7 +168,7 @@ function AdminPartita() {
         >
           {playable.map(m => (
             <option key={m.id} value={m.id}>
-              {phaseShort[m.phase]}{m.matchday} · {getTeam(m.homeTeamId)?.shortName} vs {getTeam(m.awayTeamId)?.shortName} · {new Date(m.date).toLocaleDateString("it-IT", { day: "2-digit", month: "short" })}
+              {phaseShort[m.phase]}{m.matchday} · {getTeam(m.homeTeamId)?.shortName} vs {getTeam(m.awayTeamId)?.shortName} · {new Date(m.date).toLocaleDateString("it-IT", { day: "2-digit", month: "short" })} · {statusLabel(m.status)}
             </option>
           ))}
         </select>
@@ -161,35 +180,43 @@ function AdminPartita() {
           <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             {phaseLabel[match.phase]} · giornata {match.matchday}
           </span>
-          <StatusBadge status={state.status} />
+          <StatusBadge status={match.status} />
         </div>
 
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <TeamColumn team={home} side="home" active={activeSide === "home"} onSelect={() => setActiveSide("home")} />
           <div className="flex items-end gap-2 text-5xl sm:text-6xl font-black tabular-nums">
-            <span className={activeSide === "home" ? "text-primary" : ""}>{state.homeScore}</span>
+            <span className={activeSide === "home" ? "text-primary" : ""}>{homeScore}</span>
             <span className="text-2xl text-muted-foreground mb-1.5">:</span>
-            <span className={activeSide === "away" ? "text-primary" : ""}>{state.awayScore}</span>
+            <span className={activeSide === "away" ? "text-primary" : ""}>{awayScore}</span>
           </div>
           <TeamColumn team={away} side="away" active={activeSide === "away"} onSelect={() => setActiveSide("away")} />
         </div>
 
-        {/* Clock & controls */}
         <div className="mt-4 flex items-center justify-center gap-2">
           <button onClick={() => bumpClock(-1)} className="w-8 h-8 rounded-md bg-secondary font-bold">-</button>
           <div className="px-4 py-1.5 rounded-md bg-background border text-center min-w-[80px]">
             <div className="text-[10px] uppercase text-muted-foreground font-bold">Minuto</div>
-            <div className="text-lg font-black tabular-nums leading-none">{state.clock}'</div>
+            <div className="text-lg font-black tabular-nums leading-none">{clock}'</div>
           </div>
           <button onClick={() => bumpClock(1)} className="w-8 h-8 rounded-md bg-secondary font-bold">+</button>
         </div>
 
         <div className="flex flex-wrap gap-2 mt-4 justify-center">
-          {state.status === "finished" ? (
-            <button onClick={reset} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
-              <RotateCcw className="w-4 h-4" /> Riapri
+          {isLocked ? (
+            <button onClick={doUnlock} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
+              <Unlock className="w-4 h-4" /> Sblocca
             </button>
-          ) : state.status === "live" ? (
+          ) : isFinished ? (
+            <>
+              <button onClick={doReopen} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
+                <RotateCcw className="w-4 h-4" /> Riapri
+              </button>
+              <button onClick={() => setConfirmLock(true)} className="px-3 py-2 rounded-lg bg-foreground text-background text-sm font-semibold flex items-center gap-1.5">
+                <Lock className="w-4 h-4" /> Blocca risultato
+              </button>
+            </>
+          ) : match.status === "live" ? (
             <button onClick={togglePause} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
               <Pause className="w-4 h-4" /> Pausa
             </button>
@@ -198,20 +225,29 @@ function AdminPartita() {
               <Play className="w-4 h-4" /> Avvia
             </button>
           )}
-          <button onClick={undo} disabled={state.events.length === 0} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5 disabled:opacity-40">
+
+          {!isLocked && !isFinished && (
+            <button onClick={doReset} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
+              <RotateCcw className="w-4 h-4" /> Reset
+            </button>
+          )}
+
+          <button onClick={undo} disabled={match.events.length === 0 || isLocked} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5 disabled:opacity-40">
             <Undo2 className="w-4 h-4" /> Undo
           </button>
-          <button
-            onClick={() => setConfirmClose(true)}
-            disabled={state.status === "finished"}
-            className="px-3 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-semibold flex items-center gap-1.5 disabled:opacity-40"
-          >
-            <Square className="w-4 h-4" /> Chiudi
-          </button>
+
+          {!isFinished && !isLocked && (
+            <button
+              onClick={() => setConfirmClose(true)}
+              className="px-3 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-semibold flex items-center gap-1.5"
+            >
+              <Square className="w-4 h-4" /> Chiudi
+            </button>
+          )}
         </div>
       </section>
 
-      {/* Side switcher (mobile big tap targets) */}
+      {/* Side switcher */}
       <div className="grid grid-cols-2 gap-2 mb-3">
         {(["home", "away"] as const).map(side => {
           const t = side === "home" ? home : away;
@@ -240,7 +276,7 @@ function AdminPartita() {
         <div className="grid grid-cols-3 gap-2">
           {QUICK.map(q => {
             const Icon = q.icon;
-            const disabled = state.status === "finished";
+            const disabled = isLocked || isFinished;
             return (
               <button
                 key={q.label}
@@ -254,15 +290,20 @@ function AdminPartita() {
             );
           })}
         </div>
+        {isLocked && (
+          <p className="text-[11px] text-muted-foreground mt-2 px-1 flex items-center gap-1">
+            <Lock className="w-3 h-3" /> Partita bloccata: nessuna modifica consentita.
+          </p>
+        )}
       </section>
 
       {/* Timeline */}
       <section>
-        <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 px-1">Timeline · {state.events.length} eventi</h2>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 px-1">Timeline · {match.events.length} eventi</h2>
         <div className="rounded-xl border bg-card overflow-hidden">
-          {state.events.length === 0 ? (
+          {match.events.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-8">Nessun evento registrato.</div>
-          ) : state.events.map(ev => {
+          ) : match.events.map(ev => {
             const sideTeam = ev.team === "home" ? home : away;
             const isOwn = ev.type === "own_goal";
             return (
@@ -272,7 +313,7 @@ function AdminPartita() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold truncate">{getPlayerName(ev.playerId)}</div>
                   <div className="text-[11px] text-muted-foreground">
-                    {ev.label}
+                    {ev.label ?? (isOwn ? "Autogoal" : "Goal")}
                     {isOwn && <span className="ml-1 italic">(punto a {(ev.team === "home" ? away : home).shortName})</span>}
                   </div>
                 </div>
@@ -284,62 +325,64 @@ function AdminPartita() {
         </div>
       </section>
 
-      {state.status === "finished" && (
+      {isFinished && (
         <div className="mt-4 rounded-xl border border-success/40 bg-success/5 p-4 flex items-center gap-3">
           <Trophy className="w-5 h-5 text-success shrink-0" />
           <div className="text-sm flex-1">
-            <div className="font-bold">Partita chiusa: {state.homeScore} - {state.awayScore}</div>
-            {state.shootoutWinner && (
-              <div className="text-xs text-muted-foreground">Vittoria ai rigori: {(state.shootoutWinner === "home" ? home : away).name}</div>
+            <div className="font-bold">Partita chiusa: {homeScore} - {awayScore}</div>
+            {match.shootoutWinner && (
+              <div className="text-xs text-muted-foreground">Vittoria ai rigori: {(match.shootoutWinner === "home" ? home : away).name}</div>
             )}
           </div>
-          <Lock className="w-4 h-4 text-muted-foreground" />
+          {isLocked
+            ? <Lock className="w-4 h-4 text-muted-foreground" />
+            : <span className="text-[10px] uppercase font-bold text-muted-foreground">Modificabile</span>}
         </div>
       )}
 
-      {/* Player picker dialog */}
       {pickerEvent && (
         <PlayerPicker
           teamId={pickerEvent.side === "home" ? home.id : away.id}
           title={`${pickerEvent.label} · ${pickerEvent.side === "home" ? home.shortName : away.shortName}`}
           subtitle={pickerEvent.type === "own_goal" ? `Autogoal — il punto va a ${(pickerEvent.side === "home" ? away : home).shortName}` : undefined}
           onCancel={() => setPickerEvent(null)}
-          onPick={recordEvent}
+          onPick={onPickPlayer}
         />
       )}
 
-      {/* Close confirm */}
       {confirmClose && (
         <CloseDialog
           tied={tied}
           home={home.name}
           away={away.name}
-          homeScore={state.homeScore}
-          awayScore={state.awayScore}
+          homeScore={homeScore}
+          awayScore={awayScore}
           onCancel={() => setConfirmClose(false)}
           onDirect={finishDirect}
           onShootout={finishShootout}
+        />
+      )}
+
+      {confirmLock && (
+        <ConfirmLockDialog
+          home={home.shortName} away={away.shortName}
+          homeScore={homeScore} awayScore={awayScore}
+          onCancel={() => setConfirmLock(false)}
+          onConfirm={doLock}
         />
       )}
     </AdminShell>
   );
 }
 
-// ---------- helpers / sub-components ----------
-
-function initFromMatch(m: Match): MatchState {
-  return {
-    homeScore: m.homeScore ?? 0,
-    awayScore: m.awayScore ?? 0,
-    status: m.status === "finished" ? "finished" : m.status === "live" ? "live" : "scheduled",
-    events: [],
-    clock: m.status === "live" ? 25 : 0,
-    shootoutWinner: m.shootoutWinner,
-  };
-}
+// ---------- helpers ----------
 
 function getPlayerName(id: string) {
   return getTeamPlayers(id.split("-p")[0])?.find(p => p.id === id)?.name ?? id;
+}
+
+function statusLabel(s: MatchStatus) {
+  return s === "live" ? "LIVE" : s === "finished" ? "Conclusa" : s === "locked" ? "Bloccata" : "Programmata";
 }
 
 function TeamColumn({ team, side, active, onSelect }: { team: { id: string; name: string; shortName: string }; side: "home" | "away"; active: boolean; onSelect: () => void }) {
@@ -357,6 +400,7 @@ function TeamColumn({ team, side, active, onSelect }: { team: { id: string; name
 function StatusBadge({ status }: { status: MatchStatus }) {
   if (status === "live") return <span className="flex items-center gap-1.5 text-live text-xs font-bold uppercase"><span className="w-2 h-2 rounded-full bg-live live-pulse" /> LIVE</span>;
   if (status === "finished") return <span className="text-xs font-bold text-success uppercase flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Finita</span>;
+  if (status === "locked") return <span className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Bloccata</span>;
   return <span className="text-xs font-bold text-muted-foreground uppercase">In attesa</span>;
 }
 
@@ -426,6 +470,37 @@ function CloseDialog({
             </button>
           )}
           <button onClick={onCancel} className="w-full border py-2 rounded-lg text-sm font-semibold">Annulla</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmLockDialog({
+  home, away, homeScore, awayScore, onCancel, onConfirm,
+}: {
+  home: string; away: string; homeScore: number; awayScore: number;
+  onCancel: () => void; onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm p-4" onClick={onCancel}>
+      <div className="w-full max-w-sm bg-card border rounded-xl shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="px-4 py-3 border-b flex items-center justify-between">
+          <h3 className="font-black flex items-center gap-2"><Lock className="w-4 h-4" /> Bloccare il risultato?</h3>
+          <button onClick={onCancel} className="p-1.5 rounded hover:bg-secondary"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-4">
+          <div className="text-center text-3xl font-black tabular-nums mb-1">{homeScore} - {awayScore}</div>
+          <div className="text-center text-xs text-muted-foreground mb-4">{home} vs {away}</div>
+          <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3 mb-3 text-xs">
+            Dopo il blocco non sarà più possibile modificare eventi o punteggio finché non sbloccata.
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={onCancel} className="border py-2 rounded-lg text-sm font-semibold">Annulla</button>
+            <button onClick={onConfirm} className="bg-foreground text-background py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5">
+              <Lock className="w-4 h-4" /> Conferma blocco
+            </button>
+          </div>
         </div>
       </div>
     </div>
