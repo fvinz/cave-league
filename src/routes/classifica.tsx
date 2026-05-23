@@ -9,6 +9,7 @@ export const Route = createFileRoute("/classifica")({
 });
 
 function ClassificaPage() {
+  useStoreVersion();
   const standings = computeStandings();
 
   return (
