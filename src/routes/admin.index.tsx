@@ -10,9 +10,11 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function AdminDashboard() {
+  useStoreVersion();
   const liveCount = matches.filter(m => m.status === "live").length;
   const finishedCount = matches.filter(m => m.status === "finished").length;
   const scheduledCount = matches.filter(m => m.status === "scheduled").length;
+  const lockedCount = matches.filter(m => m.status === "locked").length;
   const standings = computeStandings();
 
   const stats = [
