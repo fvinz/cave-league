@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { TeamBadge } from "@/components/TeamBadge";
-import { computeStandings, getTeam } from "@/lib/mockData";
+import { computeStandings, getTeam, useStoreVersion } from "@/lib/mockData";
 
 export const Route = createFileRoute("/classifica")({
   component: ClassificaPage,
@@ -9,6 +9,7 @@ export const Route = createFileRoute("/classifica")({
 });
 
 function ClassificaPage() {
+  useStoreVersion();
   const standings = computeStandings();
 
   return (

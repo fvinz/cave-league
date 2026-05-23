@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { MatchCard } from "@/components/MatchCard";
-import { matches, MatchPhase, MatchStatus, phaseLabel, TOURNAMENT_TODAY } from "@/lib/mockData";
+import { matches, MatchPhase, MatchStatus, phaseLabel, TOURNAMENT_TODAY, useStoreVersion } from "@/lib/mockData";
 
 export const Route = createFileRoute("/calendario")({
   component: CalendarioPage,
@@ -10,6 +10,7 @@ export const Route = createFileRoute("/calendario")({
 });
 
 function CalendarioPage() {
+  useStoreVersion();
   const [phase, setPhase] = useState<MatchPhase | "all">("all");
   const [status, setStatus] = useState<MatchStatus | "all">("all");
 

@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { AdminShell } from "@/components/AdminShell";
-import { matches, teams, players, computeStandings } from "@/lib/mockData";
-import { Calendar, Users, Gamepad2, Upload, Zap } from "lucide-react";
+import { matches, teams, computeStandings, useStoreVersion, recomputeAll } from "@/lib/mockData";
+import { Calendar, Users, Gamepad2, Upload, Zap, RefreshCw, Lock } from "lucide-react";
 
 export const Route = createFileRoute("/admin/")({
   component: AdminDashboard,
@@ -9,16 +10,18 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function AdminDashboard() {
+  useStoreVersion();
   const liveCount = matches.filter(m => m.status === "live").length;
   const finishedCount = matches.filter(m => m.status === "finished").length;
   const scheduledCount = matches.filter(m => m.status === "scheduled").length;
+  const lockedCount = matches.filter(m => m.status === "locked").length;
   const standings = computeStandings();
 
   const stats = [
     { label: "Squadre", value: teams.length, icon: Users },
-    { label: "Giocatori", value: players.length, icon: Users },
     { label: "Partite totali", value: matches.length, icon: Calendar },
     { label: "Live", value: liveCount, icon: Zap, highlight: liveCount > 0 },
+    { label: "Bloccate", value: lockedCount, icon: Lock },
   ];
 
   const actions = [
@@ -29,8 +32,19 @@ function AdminDashboard() {
 
   return (
     <AdminShell>
-      <h1 className="text-2xl font-black mb-1">Dashboard</h1>
-      <p className="text-sm text-muted-foreground mb-6">Cave League 2026 · stato torneo</p>
+      <div className="flex items-start justify-between gap-3 mb-6">
+        <div>
+          <h1 className="text-2xl font-black mb-1">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Cave League 2026 · stato torneo</p>
+        </div>
+        <button
+          onClick={() => { recomputeAll(); toast.success("Dati ricalcolati da tutti gli eventi partita."); }}
+          className="shrink-0 px-3 py-2 rounded-lg border bg-card text-xs font-bold flex items-center gap-1.5 hover:bg-secondary/50"
+          title="Forza ricalcolo classifica e statistiche"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> Ricalcola tutto
+        </button>
+      </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
         {stats.map(s => {

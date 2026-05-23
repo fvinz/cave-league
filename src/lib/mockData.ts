@@ -23,10 +23,13 @@ export interface Team {
 }
 
 export interface MatchEvent {
+  id: string;
   minute: number;
   team: "home" | "away";
   type: "goal" | "own_goal";
   playerId: string;
+  weight: number; // 1 = goal normale / autogoal · 2 = goal doppio
+  label?: string;
 }
 
 export interface Match {
@@ -118,18 +121,24 @@ const genEvents = (homeId: string, awayId: string, hs: number, as: number, seed:
   const aScorers = teamScorers(awayId);
   for (let i = 0; i < hs; i++) {
     ev.push({
+      id: `seed-${seed}-h${i}`,
       minute: ((seed * 7 + i * 13) % 40) + 1,
       team: "home",
       type: "goal",
       playerId: hScorers[(seed + i) % hScorers.length].id,
+      weight: 1,
+      label: "Goal",
     });
   }
   for (let i = 0; i < as; i++) {
     ev.push({
+      id: `seed-${seed}-a${i}`,
       minute: ((seed * 11 + i * 17) % 40) + 1,
       team: "away",
       type: "goal",
       playerId: aScorers[(seed + i + 2) % aScorers.length].id,
+      weight: 1,
+      label: "Goal",
     });
   }
   return ev.sort((a, b) => a.minute - b.minute);
@@ -433,3 +442,166 @@ export const phaseShort: Record<MatchPhase, string> = {
   third: "3°",
   final: "F",
 };
+
+// ============= REACTIVE STORE =============
+// Tutto è derivato dagli eventi delle partite. Le mutazioni qui sotto
+// modificano lo stato in place e notificano i sottoscrittori, così le
+// pagine pubbliche e admin restano sempre consistenti.
+
+import { useSyncExternalStore } from "react";
+
+let version = 0;
+const subscribers = new Set<() => void>();
+function notify() {
+  version++;
+  subscribers.forEach(fn => fn());
+}
+function subscribe(fn: () => void) {
+  subscribers.add(fn);
+  return () => { subscribers.delete(fn); };
+}
+function getSnapshot() { return version; }
+
+/** Hook: forza re-render quando lo store cambia. */
+export function useStoreVersion(): number {
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function getMatch(id: string): Match | undefined {
+  return matches.find(m => m.id === id);
+}
+
+function applyEventScore(m: Match, ev: MatchEvent, dir: 1 | -1) {
+  const scoringSide = ev.type === "own_goal"
+    ? (ev.team === "home" ? "away" : "home")
+    : ev.team;
+  const delta = dir * ev.weight;
+  if (scoringSide === "home") m.homeScore = Math.max(0, (m.homeScore ?? 0) + delta);
+  else                        m.awayScore = Math.max(0, (m.awayScore ?? 0) + delta);
+}
+
+function ensureEditable(m: Match): string | null {
+  if (m.status === "locked") return "Partita bloccata: nessuna modifica consentita.";
+  if (!m.homeTeamId || !m.awayTeamId) return "Squadre non ancora definite.";
+  return null;
+}
+
+/** Aggiunge un evento; aggiorna automaticamente il punteggio. */
+export function addMatchEvent(matchId: string, input: {
+  team: "home" | "away";
+  type: "goal" | "own_goal";
+  playerId: string;
+  weight: 1 | 2;
+  minute: number;
+  label?: string;
+}): { ok: true } | { ok: false; error: string } {
+  const m = getMatch(matchId);
+  if (!m) return { ok: false, error: "Partita non trovata." };
+  const err = ensureEditable(m);
+  if (err) return { ok: false, error: err };
+  if (m.status === "finished") return { ok: false, error: "Partita già conclusa: riaprila per modificare." };
+  if (m.homeScore == null) m.homeScore = 0;
+  if (m.awayScore == null) m.awayScore = 0;
+  const ev: MatchEvent = {
+    id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    minute: input.minute,
+    team: input.team,
+    type: input.type,
+    playerId: input.playerId,
+    weight: input.weight,
+    label: input.label ?? (input.type === "own_goal" ? "Autogoal" : input.weight === 2 ? "Goal x2" : "Goal"),
+  };
+  m.events = [ev, ...m.events];
+  applyEventScore(m, ev, 1);
+  notify();
+  return { ok: true };
+}
+
+/** Annulla l'ultimo evento (il più recente in cima alla timeline). */
+export function undoLastEvent(matchId: string): boolean {
+  const m = getMatch(matchId);
+  if (!m || m.status === "locked" || m.events.length === 0) return false;
+  const [last, ...rest] = m.events;
+  applyEventScore(m, last, -1);
+  m.events = rest;
+  notify();
+  return true;
+}
+
+/** Cambia stato partita (scheduled ↔ live, reset, ecc.). Non tocca i punteggi. */
+export function setMatchStatus(matchId: string, status: MatchStatus): boolean {
+  const m = getMatch(matchId);
+  if (!m) return false;
+  if (m.status === "locked" && status !== "locked") return false; // serve unlock esplicito
+  m.status = status;
+  notify();
+  return true;
+}
+
+/** Riapre una partita finita (rimuove esito ma mantiene eventi/punteggio). */
+export function reopenMatch(matchId: string): boolean {
+  const m = getMatch(matchId);
+  if (!m || m.status === "locked") return false;
+  m.status = "live";
+  m.shootoutWinner = undefined;
+  notify();
+  return true;
+}
+
+/** Reset completo: azzera punteggio, eventi e shootout. */
+export function resetMatch(matchId: string): boolean {
+  const m = getMatch(matchId);
+  if (!m || m.status === "locked") return false;
+  m.events = [];
+  m.homeScore = 0;
+  m.awayScore = 0;
+  m.shootoutWinner = undefined;
+  m.status = "scheduled";
+  notify();
+  return true;
+}
+
+/** Chiude la partita: vittoria diretta o ai rigori. */
+export function finalizeMatch(
+  matchId: string,
+  outcome: { type: "direct" } | { type: "shootout"; winner: "home" | "away" },
+): { ok: true } | { ok: false; error: string } {
+  const m = getMatch(matchId);
+  if (!m) return { ok: false, error: "Partita non trovata." };
+  if (m.status === "locked") return { ok: false, error: "Partita bloccata." };
+  const tied = (m.homeScore ?? 0) === (m.awayScore ?? 0);
+  if (outcome.type === "direct" && tied) {
+    return { ok: false, error: "Risultato in parità: scegli la vittoria ai rigori." };
+  }
+  if (outcome.type === "shootout" && !tied) {
+    return { ok: false, error: "Niente rigori: il punteggio non è in parità." };
+  }
+  m.status = "finished";
+  m.shootoutWinner = outcome.type === "shootout" ? outcome.winner : undefined;
+  notify();
+  return { ok: true };
+}
+
+/** Lock definitivo: nessuna modifica futura possibile finché non viene sbloccato. */
+export function lockMatch(matchId: string): boolean {
+  const m = getMatch(matchId);
+  if (!m) return false;
+  m.status = "locked";
+  notify();
+  return true;
+}
+
+/** Sblocca una partita bloccata (la rimette su scheduled). */
+export function unlockMatch(matchId: string): boolean {
+  const m = getMatch(matchId);
+  if (!m || m.status !== "locked") return false;
+  m.status = "scheduled";
+  notify();
+  return true;
+}
+
+/** "Ricalcola tutto": non c'è cache, ma forza il refresh di ogni vista. */
+export function recomputeAll() {
+  notify();
+}
+

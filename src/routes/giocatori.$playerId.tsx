@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { TeamBadge } from "@/components/TeamBadge";
-import { getPlayer, getPlayerStats, getTeam, getTeamMatches, PlayerRole } from "@/lib/mockData";
+import { getPlayer, getPlayerStats, getTeam, getTeamMatches, PlayerRole, useStoreVersion } from "@/lib/mockData";
 
 export const Route = createFileRoute("/giocatori/$playerId")({
   component: PlayerDetail,
@@ -11,6 +11,7 @@ export const Route = createFileRoute("/giocatori/$playerId")({
 const roleLabel: Record<PlayerRole, string> = { p: "Portiere", g: "Giocatore", pres: "Presidente" };
 
 function PlayerDetail() {
+  useStoreVersion();
   const { playerId } = Route.useParams();
   const player = getPlayer(playerId);
   if (!player) throw notFound();

@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { TeamBadge } from "@/components/TeamBadge";
-import { getTeam, topScorers, topCleanSheets } from "@/lib/mockData";
+import { getTeam, topScorers, topCleanSheets, useStoreVersion } from "@/lib/mockData";
 
 export const Route = createFileRoute("/statistiche")({
   component: StatsPage,
@@ -10,6 +10,7 @@ export const Route = createFileRoute("/statistiche")({
 });
 
 function StatsPage() {
+  useStoreVersion();
   const [tab, setTab] = useState<"scorers" | "keepers">("scorers");
   const rows = tab === "scorers"
     ? topScorers(20).map(r => ({ player: r.player, value: r.goals }))
