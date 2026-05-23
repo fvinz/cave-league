@@ -11,6 +11,7 @@ export const Route = createFileRoute("/giocatori/$playerId")({
 const roleLabel: Record<PlayerRole, string> = { p: "Portiere", g: "Giocatore", pres: "Presidente" };
 
 function PlayerDetail() {
+  useStoreVersion();
   const { playerId } = Route.useParams();
   const player = getPlayer(playerId);
   if (!player) throw notFound();
