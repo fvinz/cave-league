@@ -12,6 +12,7 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
+  useStoreVersion();
   const standings = computeStandings().slice(0, 5);
   const scorers = topScorers(5);
   const today = matchesOnDay(TOURNAMENT_TODAY);
