@@ -10,6 +10,7 @@ export const Route = createFileRoute("/calendario")({
 });
 
 function CalendarioPage() {
+  useStoreVersion();
   const [phase, setPhase] = useState<MatchPhase | "all">("all");
   const [status, setStatus] = useState<MatchStatus | "all">("all");
 
