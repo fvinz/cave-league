@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { TeamBadge } from "@/components/TeamBadge";
-import { getTeam, topScorers, topCleanSheets } from "@/lib/mockData";
+import { getTeam, topScorers, topCleanSheets, useStoreVersion } from "@/lib/mockData";
 
 export const Route = createFileRoute("/statistiche")({
   component: StatsPage,
