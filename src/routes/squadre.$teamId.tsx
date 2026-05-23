@@ -18,6 +18,7 @@ const roleColor: Record<PlayerRole, string> = {
 };
 
 function TeamDetail() {
+  useStoreVersion();
   const { teamId } = Route.useParams();
   const team = getTeam(teamId);
   if (!team) throw notFound();
