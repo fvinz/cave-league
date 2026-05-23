@@ -23,10 +23,13 @@ export interface Team {
 }
 
 export interface MatchEvent {
+  id: string;
   minute: number;
   team: "home" | "away";
   type: "goal" | "own_goal";
   playerId: string;
+  weight: number; // 1 = goal normale / autogoal · 2 = goal doppio
+  label?: string;
 }
 
 export interface Match {
