@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { MatchCard } from "@/components/MatchCard";
 import { TeamBadge } from "@/components/TeamBadge";
 import { SectionHeader } from "@/components/SectionHeader";
-import { computeStandings, getTeam, matches, matchesOnDay, topScorers, TOURNAMENT_TODAY } from "@/lib/mockData";
+import { computeStandings, getTeam, matches, matchesOnDay, topScorers, TOURNAMENT_TODAY, useStoreVersion } from "@/lib/mockData";
 import { Calendar, Trophy, Zap } from "lucide-react";
 
 export const Route = createFileRoute("/")({
