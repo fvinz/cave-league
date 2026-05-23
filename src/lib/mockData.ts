@@ -121,18 +121,24 @@ const genEvents = (homeId: string, awayId: string, hs: number, as: number, seed:
   const aScorers = teamScorers(awayId);
   for (let i = 0; i < hs; i++) {
     ev.push({
+      id: `seed-${seed}-h${i}`,
       minute: ((seed * 7 + i * 13) % 40) + 1,
       team: "home",
       type: "goal",
       playerId: hScorers[(seed + i) % hScorers.length].id,
+      weight: 1,
+      label: "Goal",
     });
   }
   for (let i = 0; i < as; i++) {
     ev.push({
+      id: `seed-${seed}-a${i}`,
       minute: ((seed * 11 + i * 17) % 40) + 1,
       team: "away",
       type: "goal",
       playerId: aScorers[(seed + i + 2) % aScorers.length].id,
+      weight: 1,
+      label: "Goal",
     });
   }
   return ev.sort((a, b) => a.minute - b.minute);
