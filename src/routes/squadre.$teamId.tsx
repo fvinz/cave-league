@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { MatchCard } from "@/components/MatchCard";
 import { TeamBadge } from "@/components/TeamBadge";
 import { SectionHeader } from "@/components/SectionHeader";
-import { computeStandings, getPlayer, getPlayerStats, getTeam, getTeamAggregate, getTeamMatches, getTeamPlayers, PlayerRole } from "@/lib/mockData";
+import { computeStandings, getPlayer, getPlayerStats, getTeam, getTeamAggregate, getTeamMatches, getTeamPlayers, PlayerRole, useStoreVersion } from "@/lib/mockData";
 
 export const Route = createFileRoute("/squadre/$teamId")({
   component: TeamDetail,
