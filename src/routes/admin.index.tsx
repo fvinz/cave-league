@@ -19,9 +19,9 @@ function AdminDashboard() {
 
   const stats = [
     { label: "Squadre", value: teams.length, icon: Users },
-    { label: "Giocatori", value: players.length, icon: Users },
     { label: "Partite totali", value: matches.length, icon: Calendar },
     { label: "Live", value: liveCount, icon: Zap, highlight: liveCount > 0 },
+    { label: "Bloccate", value: lockedCount, icon: Lock },
   ];
 
   const actions = [
