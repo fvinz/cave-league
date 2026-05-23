@@ -10,6 +10,7 @@ export const Route = createFileRoute("/statistiche")({
 });
 
 function StatsPage() {
+  useStoreVersion();
   const [tab, setTab] = useState<"scorers" | "keepers">("scorers");
   const rows = tab === "scorers"
     ? topScorers(20).map(r => ({ player: r.player, value: r.goals }))
