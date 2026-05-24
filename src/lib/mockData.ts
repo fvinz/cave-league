@@ -483,11 +483,10 @@ export async function setMatchStatus(matchId: string, status: MatchStatus): Prom
   const m = getMatch(matchId);
   if (!m) return false;
   if (m.status === "locked" && status !== "locked") return false;
-  const patch: Record<string, unknown> = { status };
-  if (status !== "finished" && status !== "locked") {
-    patch.result_type = null;
-    patch.winner_team_id = null;
-  }
+  const clearResult = status !== "finished" && status !== "locked";
+  const patch = clearResult
+    ? { status, result_type: null, winner_team_id: null }
+    : { status };
   const { error } = await supabase.from("matches").update(patch).eq("id", matchId);
   if (error) return false;
   await reloadAll();
