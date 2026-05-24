@@ -18,6 +18,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as SquadreTeamIdRouteImport } from './routes/squadre.$teamId'
 import { Route as GiocatoriPlayerIdRouteImport } from './routes/giocatori.$playerId'
 import { Route as AdminPartitaRouteImport } from './routes/admin.partita'
+import { Route as AdminLoginRouteImport } from './routes/admin.login'
 import { Route as AdminImportRouteImport } from './routes/admin.import'
 import { Route as AdminCalendarioRouteImport } from './routes/admin.calendario'
 
@@ -66,6 +67,11 @@ const AdminPartitaRoute = AdminPartitaRouteImport.update({
   path: '/admin/partita',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/admin/login',
+  path: '/admin/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminImportRoute = AdminImportRouteImport.update({
   id: '/admin/import',
   path: '/admin/import',
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/statistiche': typeof StatisticheRoute
   '/admin/calendario': typeof AdminCalendarioRoute
   '/admin/import': typeof AdminImportRoute
+  '/admin/login': typeof AdminLoginRoute
   '/admin/partita': typeof AdminPartitaRoute
   '/giocatori/$playerId': typeof GiocatoriPlayerIdRoute
   '/squadre/$teamId': typeof SquadreTeamIdRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/statistiche': typeof StatisticheRoute
   '/admin/calendario': typeof AdminCalendarioRoute
   '/admin/import': typeof AdminImportRoute
+  '/admin/login': typeof AdminLoginRoute
   '/admin/partita': typeof AdminPartitaRoute
   '/giocatori/$playerId': typeof GiocatoriPlayerIdRoute
   '/squadre/$teamId': typeof SquadreTeamIdRoute
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/statistiche': typeof StatisticheRoute
   '/admin/calendario': typeof AdminCalendarioRoute
   '/admin/import': typeof AdminImportRoute
+  '/admin/login': typeof AdminLoginRoute
   '/admin/partita': typeof AdminPartitaRoute
   '/giocatori/$playerId': typeof GiocatoriPlayerIdRoute
   '/squadre/$teamId': typeof SquadreTeamIdRoute
@@ -126,6 +135,7 @@ export interface FileRouteTypes {
     | '/statistiche'
     | '/admin/calendario'
     | '/admin/import'
+    | '/admin/login'
     | '/admin/partita'
     | '/giocatori/$playerId'
     | '/squadre/$teamId'
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/statistiche'
     | '/admin/calendario'
     | '/admin/import'
+    | '/admin/login'
     | '/admin/partita'
     | '/giocatori/$playerId'
     | '/squadre/$teamId'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/statistiche'
     | '/admin/calendario'
     | '/admin/import'
+    | '/admin/login'
     | '/admin/partita'
     | '/giocatori/$playerId'
     | '/squadre/$teamId'
@@ -166,6 +178,7 @@ export interface RootRouteChildren {
   StatisticheRoute: typeof StatisticheRoute
   AdminCalendarioRoute: typeof AdminCalendarioRoute
   AdminImportRoute: typeof AdminImportRoute
+  AdminLoginRoute: typeof AdminLoginRoute
   AdminPartitaRoute: typeof AdminPartitaRoute
   GiocatoriPlayerIdRoute: typeof GiocatoriPlayerIdRoute
   SquadreTeamIdRoute: typeof SquadreTeamIdRoute
@@ -238,6 +251,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPartitaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/login': {
+      id: '/admin/login'
+      path: '/admin/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/import': {
       id: '/admin/import'
       path: '/admin/import'
@@ -262,6 +282,7 @@ const rootRouteChildren: RootRouteChildren = {
   StatisticheRoute: StatisticheRoute,
   AdminCalendarioRoute: AdminCalendarioRoute,
   AdminImportRoute: AdminImportRoute,
+  AdminLoginRoute: AdminLoginRoute,
   AdminPartitaRoute: AdminPartitaRoute,
   GiocatoriPlayerIdRoute: GiocatoriPlayerIdRoute,
   SquadreTeamIdRoute: SquadreTeamIdRoute,

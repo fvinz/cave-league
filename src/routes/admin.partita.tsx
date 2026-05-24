@@ -80,26 +80,26 @@ function AdminPartita() {
     action();
   };
 
-  const start = () => guard(() => {
-    setMatchStatus(match.id, "live");
+  const start = () => guard(async () => {
+    await setMatchStatus(match.id, "live");
     toast.success("Partita avviata", { description: `${home.shortName} vs ${away.shortName}` });
   });
 
-  const togglePause = () => guard(() => {
-    setMatchStatus(match.id, match.status === "live" ? "scheduled" : "live");
+  const togglePause = () => guard(async () => {
+    await setMatchStatus(match.id, match.status === "live" ? "scheduled" : "live");
   });
 
-  const doReset = () => guard(() => {
-    if (resetMatch(match.id)) toast.info("Partita resettata");
+  const doReset = () => guard(async () => {
+    if (await resetMatch(match.id)) toast.info("Partita resettata");
   });
 
-  const doReopen = () => guard(() => {
-    if (reopenMatch(match.id)) toast.info("Partita riaperta");
+  const doReopen = () => guard(async () => {
+    if (await reopenMatch(match.id)) toast.info("Partita riaperta");
   });
 
-  const onPickPlayer = (playerId: string) => {
+  const onPickPlayer = async (playerId: string) => {
     if (!pickerEvent) return;
-    const res = addMatchEvent(match.id, {
+    const res = await addMatchEvent(match.id, {
       team: pickerEvent.side,
       type: pickerEvent.type,
       playerId,
@@ -114,33 +114,33 @@ function AdminPartita() {
     setPickerEvent(null);
   };
 
-  const undo = () => {
-    if (undoLastEvent(match.id)) toast.info("Ultima azione annullata");
+  const undo = async () => {
+    if (await undoLastEvent(match.id)) toast.info("Ultima azione annullata");
   };
 
   const bumpClock = (delta: number) => setClock(c => Math.max(0, Math.min(50, c + delta)));
 
-  const finishDirect = () => {
-    const res = finalizeMatch(match.id, { type: "direct" });
+  const finishDirect = async () => {
+    const res = await finalizeMatch(match.id, { type: "direct" });
     if (!res.ok) { toast.error(res.error); return; }
     setConfirmClose(false);
     toast.success("Partita chiusa", { description: `${homeScore} - ${awayScore}` });
   };
 
-  const finishShootout = (winner: "home" | "away") => {
-    const res = finalizeMatch(match.id, { type: "shootout", winner });
+  const finishShootout = async (winner: "home" | "away") => {
+    const res = await finalizeMatch(match.id, { type: "shootout", winner });
     if (!res.ok) { toast.error(res.error); return; }
     setConfirmClose(false);
     toast.success(`Vittoria ai rigori: ${winner === "home" ? home.shortName : away.shortName}`);
   };
 
-  const doLock = () => {
-    if (lockMatch(match.id)) toast.success("Partita bloccata", { description: "Risultato definitivo." });
+  const doLock = async () => {
+    if (await lockMatch(match.id)) toast.success("Partita bloccata", { description: "Risultato definitivo." });
     setConfirmLock(false);
   };
 
-  const doUnlock = () => {
-    if (unlockMatch(match.id)) toast.info("Partita sbloccata");
+  const doUnlock = async () => {
+    if (await unlockMatch(match.id)) toast.info("Partita sbloccata");
   };
 
   return (

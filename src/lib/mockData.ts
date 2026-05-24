@@ -1,7 +1,11 @@
-// Mock data for Cave League tournament (5-14 June 2026)
-// 12 squadre · regular season parziale (ogni squadra gioca 4 partite)
-// passano le prime 8 → quarti → semifinali → finale (+ terzo posto opzionale)
+// Cave League — data layer (Supabase-backed)
+// Mantiene gli stessi export del precedente mock per non rompere le pagine.
+// Le strutture vengono popolate al boot da DataProvider e refreshate su mutazione.
 
+import { useSyncExternalStore } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
+// ============= TYPES =============
 export type PlayerRole = "p" | "g" | "pres";
 export type MatchStatus = "scheduled" | "live" | "finished" | "locked";
 export type MatchPhase = "regular" | "quarter" | "semi" | "third" | "final";
@@ -28,7 +32,7 @@ export interface MatchEvent {
   team: "home" | "away";
   type: "goal" | "own_goal";
   playerId: string;
-  weight: number; // 1 = goal normale / autogoal · 2 = goal doppio
+  weight: number;
   label?: string;
 }
 
@@ -37,16 +41,16 @@ export interface Match {
   matchday: number;
   phase: MatchPhase;
   date: string;
-  homeTeamId: string | null; // null when locked (es. quarti non ancora definiti)
+  homeTeamId: string | null;
   awayTeamId: string | null;
-  homeLabel?: string; // placeholder per knockout: "1° regular season"
+  homeLabel?: string;
   awayLabel?: string;
   homeScore: number | null;
   awayScore: number | null;
   status: MatchStatus;
   venue: string;
   highlight?: string;
-  shootoutWinner?: "home" | "away"; // se pareggio tempi reg.
+  shootoutWinner?: "home" | "away";
   events: MatchEvent[];
 }
 
@@ -62,221 +66,219 @@ export interface Standing {
   points: number;
 }
 
-// ============= TEAMS (12) =============
-export const teams: Team[] = [
-  { id: "t1",  name: "Black Wolves",   shortName: "BWV", color: "#0f172a", accent: "#f1f5f9" },
-  { id: "t2",  name: "Cave Roma",      shortName: "ROM", color: "#dc2626", accent: "#fef2f2" },
-  { id: "t3",  name: "Drago Cave",     shortName: "DRG", color: "#9333ea", accent: "#faf5ff" },
-  { id: "t4",  name: "Eagles Cave",    shortName: "EGL", color: "#0284c7", accent: "#f0f9ff" },
-  { id: "t5",  name: "Furia Gialla",   shortName: "FRG", color: "#eab308", accent: "#fefce8" },
-  { id: "t6",  name: "Gladiatori",     shortName: "GLD", color: "#b45309", accent: "#fffbeb" },
-  { id: "t7",  name: "Lupi Argento",   shortName: "LPA", color: "#64748b", accent: "#f8fafc" },
-  { id: "t8",  name: "Orsi Neri",      shortName: "ORS", color: "#1e293b", accent: "#f1f5f9" },
-  { id: "t9",  name: "Pantere Rosa",   shortName: "PNT", color: "#ec4899", accent: "#fdf2f8" },
-  { id: "t10", name: "Sparta Cave",    shortName: "SPC", color: "#0d9488", accent: "#f0fdfa" },
-  { id: "t11", name: "Tigri Bianche",  shortName: "TGB", color: "#7c3aed", accent: "#faf5ff" },
-  { id: "t12", name: "Verde Cave",     shortName: "VRD", color: "#16a34a", accent: "#f0fdf4" },
-];
-
-// ============= PLAYERS =============
-const surnames = [
-  "Rossi", "Bianchi", "Verdi", "Neri", "Galli", "Conti", "Russo", "Marino",
-  "Bruno", "Greco",
-];
-const firstnames = [
-  "Marco", "Luca", "Andrea", "Simone", "Davide", "Matteo", "Federico", "Giuseppe",
-  "Alessandro", "Stefano",
-];
-// 10 giocatori per squadra: 1 portiere, 8 giocatori, 1 presidente
-const buildRoster = (team: Team, teamIdx: number): Player[] =>
-  Array.from({ length: 10 }, (_, i) => {
-    const role: PlayerRole = i === 0 ? "p" : i === 9 ? "pres" : "g";
-    return {
-      id: `${team.id}-p${i}`,
-      name: `${firstnames[i]} ${surnames[(i + teamIdx) % surnames.length]}`,
-      teamId: team.id,
-      role,
-      number: i === 0 ? 1 : i === 9 ? 99 : i + 1,
-    };
-  });
-
-export const players: Player[] = teams.flatMap((t, i) => buildRoster(t, i));
-
-// ============= MATCHES =============
-const startDay = new Date("2026-06-05T00:00:00");
-const dayOffset = (d: number, h = 20, min = 0) => {
-  const date = new Date(startDay);
-  date.setDate(date.getDate() + d);
-  date.setHours(h, min, 0, 0);
-  return date.toISOString();
-};
-
-// helper: scorers deterministici dal roster (solo giocatori "g")
-const teamScorers = (teamId: string) =>
-  players.filter(p => p.teamId === teamId && p.role === "g");
-
-const genEvents = (homeId: string, awayId: string, hs: number, as: number, seed: number): MatchEvent[] => {
-  const ev: MatchEvent[] = [];
-  const hScorers = teamScorers(homeId);
-  const aScorers = teamScorers(awayId);
-  for (let i = 0; i < hs; i++) {
-    ev.push({
-      id: `seed-${seed}-h${i}`,
-      minute: ((seed * 7 + i * 13) % 40) + 1,
-      team: "home",
-      type: "goal",
-      playerId: hScorers[(seed + i) % hScorers.length].id,
-      weight: 1,
-      label: "Goal",
-    });
-  }
-  for (let i = 0; i < as; i++) {
-    ev.push({
-      id: `seed-${seed}-a${i}`,
-      minute: ((seed * 11 + i * 17) % 40) + 1,
-      team: "away",
-      type: "goal",
-      playerId: aScorers[(seed + i + 2) % aScorers.length].id,
-      weight: 1,
-      label: "Goal",
-    });
-  }
-  return ev.sort((a, b) => a.minute - b.minute);
-};
-
-interface RegSpec {
-  matchday: number;
-  day: number; // offset from 5 giugno
-  hour: number;
-  homeId: string;
-  awayId: string;
-  hs: number | null;
-  as: number | null;
-  status: MatchStatus;
-  shoot?: "home" | "away";
-  highlight?: string;
-}
-
-// 12 squadre, 4 giornate, 6 partite per giornata (24 totali)
-// circle method: ogni squadra gioca 4 avversarie distinte
-const regSpecs: RegSpec[] = [
-  // ===== Giornata 1 (5-6 giugno) — TUTTE CONCLUSE =====
-  { matchday: 1, day: 0, hour: 19, homeId: "t1",  awayId: "t2",  hs: 2, as: 3, status: "finished" },
-  { matchday: 1, day: 0, hour: 21, homeId: "t12", awayId: "t3",  hs: 1, as: 1, status: "finished", shoot: "home" },
-  { matchday: 1, day: 1, hour: 18, homeId: "t11", awayId: "t4",  hs: 0, as: 2, status: "finished" },
-  { matchday: 1, day: 1, hour: 20, homeId: "t10", awayId: "t5",  hs: 3, as: 1, status: "finished" },
-  { matchday: 1, day: 1, hour: 22, homeId: "t9",  awayId: "t6",  hs: 2, as: 2, status: "finished", shoot: "away" },
-  { matchday: 1, day: 2, hour: 19, homeId: "t8",  awayId: "t7",  hs: 1, as: 4, status: "finished" },
-  // ===== Giornata 2 (7-8 giugno) — CONCLUSE =====
-  { matchday: 2, day: 2, hour: 21, homeId: "t1",  awayId: "t3",  hs: 3, as: 0, status: "finished" },
-  { matchday: 2, day: 3, hour: 18, homeId: "t2",  awayId: "t4",  hs: 4, as: 2, status: "finished", highlight: "Big match" },
-  { matchday: 2, day: 3, hour: 20, homeId: "t12", awayId: "t5",  hs: 2, as: 2, status: "finished", shoot: "home" },
-  { matchday: 2, day: 3, hour: 22, homeId: "t11", awayId: "t6",  hs: 1, as: 0, status: "finished" },
-  { matchday: 2, day: 4, hour: 19, homeId: "t10", awayId: "t7",  hs: 2, as: 1, status: "finished" },
-  { matchday: 2, day: 4, hour: 21, homeId: "t9",  awayId: "t8",  hs: 0, as: 3, status: "finished" },
-  // ===== Giornata 3 (9-10 giugno) — oggi è il 9 =====
-  { matchday: 3, day: 4, hour: 18, homeId: "t1",  awayId: "t4",  hs: 2, as: 1, status: "finished" },
-  { matchday: 3, day: 4, hour: 20, homeId: "t3",  awayId: "t5",  hs: 1, as: 3, status: "finished" },
-  { matchday: 3, day: 4, hour: 22, homeId: "t2",  awayId: "t6",  hs: 2, as: 1, status: "live", highlight: "Derby" },
-  { matchday: 3, day: 5, hour: 19, homeId: "t12", awayId: "t7",  hs: null, as: null, status: "scheduled" },
-  { matchday: 3, day: 5, hour: 21, homeId: "t11", awayId: "t8",  hs: null, as: null, status: "scheduled" },
-  { matchday: 3, day: 6, hour: 20, homeId: "t10", awayId: "t9",  hs: null, as: null, status: "scheduled" },
-  // ===== Giornata 4 (11-12 giugno) =====
-  { matchday: 4, day: 6, hour: 22, homeId: "t1",  awayId: "t5",  hs: null, as: null, status: "scheduled" },
-  { matchday: 4, day: 7, hour: 19, homeId: "t4",  awayId: "t6",  hs: null, as: null, status: "scheduled" },
-  { matchday: 4, day: 7, hour: 21, homeId: "t3",  awayId: "t7",  hs: null, as: null, status: "scheduled" },
-  { matchday: 4, day: 7, hour: 22, homeId: "t2",  awayId: "t8",  hs: null, as: null, status: "scheduled" },
-  { matchday: 4, day: 8, hour: 19, homeId: "t12", awayId: "t9",  hs: null, as: null, status: "scheduled" },
-  { matchday: 4, day: 8, hour: 21, homeId: "t11", awayId: "t10", hs: null, as: null, status: "scheduled" },
-];
-
-const regularMatches: Match[] = regSpecs.map((s, i) => ({
-  id: `rs-${i + 1}`,
-  matchday: s.matchday,
-  phase: "regular",
-  date: dayOffset(s.day, s.hour),
-  homeTeamId: s.homeId,
-  awayTeamId: s.awayId,
-  homeScore: s.hs,
-  awayScore: s.as,
-  status: s.status,
-  venue: "Campo Centrale Cave",
-  highlight: s.highlight,
-  shootoutWinner: s.shoot,
-  events: s.status === "finished" && s.hs !== null && s.as !== null
-    ? genEvents(s.homeId, s.awayId, s.hs, s.as, i + 1)
-    : [],
-}));
-
-// ===== Knockout (tutti "locked": accoppiamenti non definiti finché regular non finisce) =====
-const knockout: Match[] = [
-  // Quarti — 13 giugno
-  ...[1, 2, 3, 4].map<Match>((n, i) => ({
-    id: `qf-${n}`,
-    matchday: 5,
-    phase: "quarter",
-    date: dayOffset(8, 18 + i * 1),
-    homeTeamId: null, awayTeamId: null,
-    homeLabel: `${n}° regular season`,
-    awayLabel: `${9 - n}° regular season`,
-    homeScore: null, awayScore: null,
-    status: "locked",
-    venue: "Campo Centrale Cave",
-    highlight: "Quarti di finale",
-    events: [],
-  })),
-  // Semifinali — 14 giugno pomeriggio
-  ...[1, 2].map<Match>((n) => ({
-    id: `sf-${n}`,
-    matchday: 6,
-    phase: "semi",
-    date: dayOffset(9, 17 + (n - 1) * 2),
-    homeTeamId: null, awayTeamId: null,
-    homeLabel: `Vincente QF${n * 2 - 1}`,
-    awayLabel: `Vincente QF${n * 2}`,
-    homeScore: null, awayScore: null,
-    status: "locked",
-    venue: "Campo Centrale Cave",
-    highlight: "Semifinale",
-    events: [],
-  })),
-  // Finale 3° posto — 14 giugno sera
-  {
-    id: "tp-1",
-    matchday: 7,
-    phase: "third",
-    date: dayOffset(9, 20),
-    homeTeamId: null, awayTeamId: null,
-    homeLabel: "Perdente SF1",
-    awayLabel: "Perdente SF2",
-    homeScore: null, awayScore: null,
-    status: "locked",
-    venue: "Campo Centrale Cave",
-    highlight: "Finale 3°/4° posto",
-    events: [],
-  },
-  // Finale — 14 giugno
-  {
-    id: "ff-1",
-    matchday: 7,
-    phase: "final",
-    date: dayOffset(9, 22),
-    homeTeamId: null, awayTeamId: null,
-    homeLabel: "Vincente SF1",
-    awayLabel: "Vincente SF2",
-    homeScore: null, awayScore: null,
-    status: "locked",
-    venue: "Campo Centrale Cave",
-    highlight: "FINALE",
-    events: [],
-  },
-];
-
-export const matches: Match[] = [...regularMatches, ...knockout];
-
+// ============= TOURNAMENT DATES =============
 export const TOURNAMENT_TODAY = new Date("2026-06-09T21:30:00");
 export const TOURNAMENT_START = new Date("2026-06-05T00:00:00");
 export const TOURNAMENT_END = new Date("2026-06-14T23:59:59");
+
+// ============= MUTABLE STATE (populated from Supabase) =============
+export let teams: Team[] = [];
+export let players: Player[] = [];
+export let matches: Match[] = [];
+
+// ============= REACTIVE STORE =============
+let version = 0;
+const subscribers = new Set<() => void>();
+function notify() {
+  version++;
+  subscribers.forEach(fn => fn());
+}
+function subscribe(fn: () => void) {
+  subscribers.add(fn);
+  return () => { subscribers.delete(fn); };
+}
+function getSnapshot() { return version; }
+
+export function useStoreVersion(): number {
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+// ============= HELPERS =============
+const TEAM_PALETTE = [
+  { color: "#0f172a", accent: "#f1f5f9" },
+  { color: "#dc2626", accent: "#fef2f2" },
+  { color: "#9333ea", accent: "#faf5ff" },
+  { color: "#0284c7", accent: "#f0f9ff" },
+  { color: "#eab308", accent: "#fefce8" },
+  { color: "#b45309", accent: "#fffbeb" },
+  { color: "#64748b", accent: "#f8fafc" },
+  { color: "#1e293b", accent: "#f1f5f9" },
+  { color: "#ec4899", accent: "#fdf2f8" },
+  { color: "#0d9488", accent: "#f0fdfa" },
+  { color: "#7c3aed", accent: "#faf5ff" },
+  { color: "#16a34a", accent: "#f0fdf4" },
+];
+
+function teamColor(idx: number) {
+  return TEAM_PALETTE[idx % TEAM_PALETTE.length];
+}
+
+function deriveShortName(name: string): string {
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) return (words[0][0] + words[1][0] + (words[2]?.[0] ?? "")).toUpperCase().slice(0, 3);
+  return name.slice(0, 3).toUpperCase();
+}
+
+const STAGE_TO_PHASE: Record<string, MatchPhase> = {
+  regular: "regular",
+  quarterfinal: "quarter",
+  semifinal: "semi",
+  third_place: "third",
+  final: "final",
+};
+const PHASE_TO_STAGE: Record<MatchPhase, string> = {
+  regular: "regular",
+  quarter: "quarterfinal",
+  semi: "semifinal",
+  third: "third_place",
+  final: "final",
+};
+
+// Cache stage id ↔ code mapping (loaded once)
+let stageIdByCode: Record<string, string> = {};
+let stageCodeById: Record<string, string> = {};
+export function getStageIdByPhase(phase: MatchPhase): string | undefined {
+  return stageIdByCode[PHASE_TO_STAGE[phase]];
+}
+
+// ============= LOAD =============
+let loaded = false;
+let loadingPromise: Promise<void> | null = null;
+
+export async function loadAll(): Promise<void> {
+  if (loadingPromise) return loadingPromise;
+  loadingPromise = (async () => {
+    const [stagesRes, teamsRes, playersRes, matchdaysRes, matchesRes, eventsRes] = await Promise.all([
+      supabase.from("stages").select("*").order("sort_order"),
+      supabase.from("teams").select("*").order("name"),
+      supabase.from("players").select("*"),
+      supabase.from("matchdays").select("*").order("sort_order"),
+      supabase.from("matches").select("*").order("scheduled_at"),
+      supabase.from("match_events").select("*").order("event_order"),
+    ]);
+    if (stagesRes.data) {
+      stageIdByCode = {};
+      stageCodeById = {};
+      for (const s of stagesRes.data) {
+        stageIdByCode[s.code] = s.id;
+        stageCodeById[s.id] = s.code;
+      }
+    }
+    teams = (teamsRes.data ?? []).map((t, i) => {
+      const pal = teamColor(i);
+      return {
+        id: t.id,
+        name: t.name,
+        shortName: deriveShortName(t.name),
+        color: pal.color,
+        accent: pal.accent,
+      };
+    });
+    players = (playersRes.data ?? []).map(p => ({
+      id: p.id,
+      name: p.full_name,
+      teamId: p.team_id,
+      role: p.role as PlayerRole,
+      number: p.jersey_number ?? 0,
+    }));
+
+    const mdById: Record<string, { sort_order: number; title: string; event_date: string }> = {};
+    for (const md of matchdaysRes.data ?? []) {
+      mdById[md.id] = { sort_order: md.sort_order, title: md.title, event_date: md.event_date };
+    }
+
+    const eventsByMatch: Record<string, MatchEvent[]> = {};
+    for (const e of eventsRes.data ?? []) {
+      const list = eventsByMatch[e.match_id] ??= [];
+      // Find match to determine if event team is home or away
+      const m = (matchesRes.data ?? []).find(x => x.id === e.match_id);
+      const side: "home" | "away" =
+        m && e.team_id === m.away_team_id ? "away" : "home";
+      list.push({
+        id: e.id,
+        minute: e.minute ?? 0,
+        team: side,
+        type: e.event_type === "own_goal" ? "own_goal" : "goal",
+        playerId: e.player_id,
+        weight: e.event_type === "double_goal" ? 2 : 1,
+        label: e.event_type === "own_goal" ? "Autogoal" : e.event_type === "double_goal" ? "Goal x2" : "Goal",
+      });
+    }
+
+    matches = (matchesRes.data ?? []).map(m => {
+      const phase = STAGE_TO_PHASE[stageCodeById[m.stage_id] ?? "regular"] ?? "regular";
+      const md = m.matchday_id ? mdById[m.matchday_id] : undefined;
+      return {
+        id: m.id,
+        matchday: md?.sort_order ?? 0,
+        phase,
+        date: m.scheduled_at,
+        homeTeamId: m.home_team_id,
+        awayTeamId: m.away_team_id,
+        homeLabel: m.home_placeholder ?? undefined,
+        awayLabel: m.away_placeholder ?? undefined,
+        homeScore: m.status === "scheduled" && (m.home_score ?? 0) === 0 && (m.away_score ?? 0) === 0 ? null : m.home_score,
+        awayScore: m.status === "scheduled" && (m.home_score ?? 0) === 0 && (m.away_score ?? 0) === 0 ? null : m.away_score,
+        status: m.status as MatchStatus,
+        venue: m.venue ?? "",
+        highlight: m.notes ?? undefined,
+        shootoutWinner:
+          m.result_type === "shootout" && m.winner_team_id
+            ? m.winner_team_id === m.home_team_id ? "home" : "away"
+            : undefined,
+        events: eventsByMatch[m.id] ?? [],
+      };
+    });
+
+    loaded = true;
+    notify();
+  })();
+  try {
+    await loadingPromise;
+  } finally {
+    loadingPromise = null;
+  }
+}
+
+export function isLoaded() { return loaded; }
+
+export async function reloadAll() {
+  loaded = false;
+  await loadAll();
+}
+
+// ============= REALTIME =============
+let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+export function startRealtime() {
+  if (realtimeChannel) return;
+  realtimeChannel = supabase
+    .channel("cave-league-data")
+    .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => { reloadAll(); })
+    .on("postgres_changes", { event: "*", schema: "public", table: "match_events" }, () => { reloadAll(); })
+    .on("postgres_changes", { event: "*", schema: "public", table: "teams" }, () => { reloadAll(); })
+    .on("postgres_changes", { event: "*", schema: "public", table: "players" }, () => { reloadAll(); })
+    .on("postgres_changes", { event: "*", schema: "public", table: "matchdays" }, () => { reloadAll(); })
+    .subscribe();
+}
+export function stopRealtime() {
+  if (realtimeChannel) {
+    supabase.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+}
+
+// ============= LOOKUPS =============
+export function getTeam(id: string | null | undefined) {
+  return id ? teams.find(t => t.id === id) : undefined;
+}
+export function getPlayer(id: string) { return players.find(p => p.id === id); }
+export function getTeamPlayers(teamId: string) { return players.filter(p => p.teamId === teamId); }
+export function getTeamMatches(teamId: string) {
+  return matches.filter(m => m.homeTeamId === teamId || m.awayTeamId === teamId);
+}
+export function getMatch(id: string): Match | undefined {
+  return matches.find(m => m.id === id);
+}
 
 // ============= DERIVED: STANDINGS =============
 export function computeStandings(): Standing[] {
@@ -286,11 +288,11 @@ export function computeStandings(): Standing[] {
     lossesReg: 0, goalsFor: 0, goalsAgainst: 0, points: 0,
   }));
   matches
-    .filter(m => m.phase === "regular" && m.status === "finished" && m.homeTeamId && m.awayTeamId)
+    .filter(m => m.phase === "regular" && (m.status === "finished" || m.status === "locked") && m.homeTeamId && m.awayTeamId)
     .forEach(m => {
-      const h = map.get(m.homeTeamId!)!;
-      const a = map.get(m.awayTeamId!)!;
-      const hs = m.homeScore!, as = m.awayScore!;
+      const h = map.get(m.homeTeamId!); const a = map.get(m.awayTeamId!);
+      if (!h || !a) return;
+      const hs = m.homeScore ?? 0; const as = m.awayScore ?? 0;
       h.played++; a.played++;
       h.goalsFor += hs; h.goalsAgainst += as;
       a.goalsFor += as; a.goalsAgainst += hs;
@@ -308,7 +310,7 @@ export function computeStandings(): Standing[] {
     const dB = b.goalsFor - b.goalsAgainst;
     if (dB !== dA) return dB - dA;
     if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
-    return getTeam(a.teamId)!.name.localeCompare(getTeam(b.teamId)!.name);
+    return (getTeam(a.teamId)?.name ?? "").localeCompare(getTeam(b.teamId)?.name ?? "");
   });
 }
 
@@ -326,21 +328,19 @@ export function getPlayerStats(playerId: string): PlayerStats {
 
   const teamMatches = matches.filter(
     m => (m.homeTeamId === player.teamId || m.awayTeamId === player.teamId) &&
-         (m.status === "finished" || m.status === "live")
+         (m.status === "finished" || m.status === "live" || m.status === "locked")
   );
-  // presenze = numero partite della squadra (regular + eventuali knockout giocati)
   const appearances = teamMatches.length;
 
   let goals = 0, ownGoals = 0, cleanSheets = 0;
   for (const m of matches) {
-    if (m.status !== "finished") continue;
+    if (m.status !== "finished" && m.status !== "locked") continue;
     for (const ev of m.events) {
       if (ev.playerId === playerId) {
         if (ev.type === "goal") goals++;
         else if (ev.type === "own_goal") ownGoals++;
       }
     }
-    // clean sheet: assegnata a tutti i portieri della squadra se l'avversario non ha segnato
     if (player.role === "p") {
       const isHome = m.homeTeamId === player.teamId;
       const isAway = m.awayTeamId === player.teamId;
@@ -351,23 +351,13 @@ export function getPlayerStats(playerId: string): PlayerStats {
   return { appearances, goals, ownGoals, cleanSheets };
 }
 
-// ============= LOOKUPS =============
-export function getTeam(id: string | null | undefined) {
-  return id ? teams.find(t => t.id === id) : undefined;
-}
-export function getPlayer(id: string) { return players.find(p => p.id === id); }
-export function getTeamPlayers(teamId: string) { return players.filter(p => p.teamId === teamId); }
-export function getTeamMatches(teamId: string) {
-  return matches.filter(m => m.homeTeamId === teamId || m.awayTeamId === teamId);
-}
-
 // ============= DERIVED: TEAM AGGREGATES =============
 export interface TeamAggregate {
   goalsFor: number;
   goalsAgainst: number;
   played: number;
   wins: number;
-  draws: number; // pareggi nei tempi reg. (decisi ai rigori)
+  draws: number;
   losses: number;
   cleanSheets: number;
   topScorer?: { playerId: string; goals: number };
@@ -375,21 +365,20 @@ export interface TeamAggregate {
 
 export function getTeamAggregate(teamId: string): TeamAggregate {
   const finished = matches.filter(
-    m => m.status === "finished" &&
+    m => (m.status === "finished" || m.status === "locked") &&
          (m.homeTeamId === teamId || m.awayTeamId === teamId)
   );
   let goalsFor = 0, goalsAgainst = 0, wins = 0, draws = 0, losses = 0, cleanSheets = 0;
   for (const m of finished) {
     const isHome = m.homeTeamId === teamId;
-    const my = isHome ? m.homeScore! : m.awayScore!;
-    const opp = isHome ? m.awayScore! : m.homeScore!;
+    const my = isHome ? (m.homeScore ?? 0) : (m.awayScore ?? 0);
+    const opp = isHome ? (m.awayScore ?? 0) : (m.homeScore ?? 0);
     goalsFor += my; goalsAgainst += opp;
     if (my > opp) wins++;
     else if (my < opp) losses++;
     else draws++;
     if (opp === 0) cleanSheets++;
   }
-  // top scorer
   let topScorer: { playerId: string; goals: number } | undefined;
   for (const p of getTeamPlayers(teamId)) {
     const s = getPlayerStats(p.id);
@@ -443,129 +432,90 @@ export const phaseShort: Record<MatchPhase, string> = {
   final: "F",
 };
 
-// ============= REACTIVE STORE =============
-// Tutto è derivato dagli eventi delle partite. Le mutazioni qui sotto
-// modificano lo stato in place e notificano i sottoscrittori, così le
-// pagine pubbliche e admin restano sempre consistenti.
-
-import { useSyncExternalStore } from "react";
-
-let version = 0;
-const subscribers = new Set<() => void>();
-function notify() {
-  version++;
-  subscribers.forEach(fn => fn());
-}
-function subscribe(fn: () => void) {
-  subscribers.add(fn);
-  return () => { subscribers.delete(fn); };
-}
-function getSnapshot() { return version; }
-
-/** Hook: forza re-render quando lo store cambia. */
-export function useStoreVersion(): number {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-}
-
-export function getMatch(id: string): Match | undefined {
-  return matches.find(m => m.id === id);
-}
-
-function applyEventScore(m: Match, ev: MatchEvent, dir: 1 | -1) {
-  const scoringSide = ev.type === "own_goal"
-    ? (ev.team === "home" ? "away" : "home")
-    : ev.team;
-  const delta = dir * ev.weight;
-  if (scoringSide === "home") m.homeScore = Math.max(0, (m.homeScore ?? 0) + delta);
-  else                        m.awayScore = Math.max(0, (m.awayScore ?? 0) + delta);
-}
-
+// ============= MUTATORS (Supabase-backed) =============
 function ensureEditable(m: Match): string | null {
   if (m.status === "locked") return "Partita bloccata: nessuna modifica consentita.";
   if (!m.homeTeamId || !m.awayTeamId) return "Squadre non ancora definite.";
   return null;
 }
 
-/** Aggiunge un evento; aggiorna automaticamente il punteggio. */
-export function addMatchEvent(matchId: string, input: {
+export async function addMatchEvent(matchId: string, input: {
   team: "home" | "away";
   type: "goal" | "own_goal";
   playerId: string;
   weight: 1 | 2;
   minute: number;
   label?: string;
-}): { ok: true } | { ok: false; error: string } {
+}): Promise<{ ok: true } | { ok: false; error: string }> {
   const m = getMatch(matchId);
   if (!m) return { ok: false, error: "Partita non trovata." };
   const err = ensureEditable(m);
   if (err) return { ok: false, error: err };
   if (m.status === "finished") return { ok: false, error: "Partita già conclusa: riaprila per modificare." };
-  if (m.homeScore == null) m.homeScore = 0;
-  if (m.awayScore == null) m.awayScore = 0;
-  const ev: MatchEvent = {
-    id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+
+  const teamId = input.team === "home" ? m.homeTeamId! : m.awayTeamId!;
+  const eventType = input.type === "own_goal" ? "own_goal" : input.weight === 2 ? "double_goal" : "goal";
+  const order = m.events.length + 1;
+  const { error } = await supabase.from("match_events").insert({
+    match_id: matchId,
+    team_id: teamId,
+    player_id: input.playerId,
+    event_type: eventType,
+    event_order: order,
     minute: input.minute,
-    team: input.team,
-    type: input.type,
-    playerId: input.playerId,
-    weight: input.weight,
-    label: input.label ?? (input.type === "own_goal" ? "Autogoal" : input.weight === 2 ? "Goal x2" : "Goal"),
-  };
-  m.events = [ev, ...m.events];
-  applyEventScore(m, ev, 1);
-  notify();
+  });
+  if (error) return { ok: false, error: error.message };
+  await reloadAll();
   return { ok: true };
 }
 
-/** Annulla l'ultimo evento (il più recente in cima alla timeline). */
-export function undoLastEvent(matchId: string): boolean {
+export async function undoLastEvent(matchId: string): Promise<boolean> {
   const m = getMatch(matchId);
   if (!m || m.status === "locked" || m.events.length === 0) return false;
-  const [last, ...rest] = m.events;
-  applyEventScore(m, last, -1);
-  m.events = rest;
-  notify();
+  const last = m.events[0]; // newest displayed first
+  const { error } = await supabase.from("match_events").delete().eq("id", last.id);
+  if (error) return false;
+  await reloadAll();
   return true;
 }
 
-/** Cambia stato partita (scheduled ↔ live, reset, ecc.). Non tocca i punteggi. */
-export function setMatchStatus(matchId: string, status: MatchStatus): boolean {
+export async function setMatchStatus(matchId: string, status: MatchStatus): Promise<boolean> {
   const m = getMatch(matchId);
   if (!m) return false;
-  if (m.status === "locked" && status !== "locked") return false; // serve unlock esplicito
-  m.status = status;
-  notify();
+  if (m.status === "locked" && status !== "locked") return false;
+  const clearResult = status !== "finished" && status !== "locked";
+  const patch = clearResult
+    ? { status, result_type: null, winner_team_id: null }
+    : { status };
+  const { error } = await supabase.from("matches").update(patch).eq("id", matchId);
+  if (error) return false;
+  await reloadAll();
   return true;
 }
 
-/** Riapre una partita finita (rimuove esito ma mantiene eventi/punteggio). */
-export function reopenMatch(matchId: string): boolean {
+export async function reopenMatch(matchId: string): Promise<boolean> {
   const m = getMatch(matchId);
   if (!m || m.status === "locked") return false;
-  m.status = "live";
-  m.shootoutWinner = undefined;
-  notify();
+  const { error } = await supabase.from("matches").update({ status: "live", result_type: null, winner_team_id: null }).eq("id", matchId);
+  if (error) return false;
+  await reloadAll();
   return true;
 }
 
-/** Reset completo: azzera punteggio, eventi e shootout. */
-export function resetMatch(matchId: string): boolean {
+export async function resetMatch(matchId: string): Promise<boolean> {
   const m = getMatch(matchId);
   if (!m || m.status === "locked") return false;
-  m.events = [];
-  m.homeScore = 0;
-  m.awayScore = 0;
-  m.shootoutWinner = undefined;
-  m.status = "scheduled";
-  notify();
+  // delete events; trigger recomputes scores
+  await supabase.from("match_events").delete().eq("match_id", matchId);
+  await supabase.from("matches").update({ status: "scheduled", result_type: null, winner_team_id: null, home_score: 0, away_score: 0 }).eq("id", matchId);
+  await reloadAll();
   return true;
 }
 
-/** Chiude la partita: vittoria diretta o ai rigori. */
-export function finalizeMatch(
+export async function finalizeMatch(
   matchId: string,
   outcome: { type: "direct" } | { type: "shootout"; winner: "home" | "away" },
-): { ok: true } | { ok: false; error: string } {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const m = getMatch(matchId);
   if (!m) return { ok: false, error: "Partita non trovata." };
   if (m.status === "locked") return { ok: false, error: "Partita bloccata." };
@@ -576,32 +526,38 @@ export function finalizeMatch(
   if (outcome.type === "shootout" && !tied) {
     return { ok: false, error: "Niente rigori: il punteggio non è in parità." };
   }
-  m.status = "finished";
-  m.shootoutWinner = outcome.type === "shootout" ? outcome.winner : undefined;
-  notify();
+  const winner_team_id =
+    outcome.type === "shootout"
+      ? (outcome.winner === "home" ? m.homeTeamId : m.awayTeamId)
+      : ((m.homeScore ?? 0) > (m.awayScore ?? 0) ? m.homeTeamId : m.awayTeamId);
+  const { error } = await supabase.from("matches").update({
+    status: "finished",
+    result_type: outcome.type,
+    winner_team_id,
+  }).eq("id", matchId);
+  if (error) return { ok: false, error: error.message };
+  await reloadAll();
   return { ok: true };
 }
 
-/** Lock definitivo: nessuna modifica futura possibile finché non viene sbloccato. */
-export function lockMatch(matchId: string): boolean {
-  const m = getMatch(matchId);
-  if (!m) return false;
-  m.status = "locked";
-  notify();
+export async function lockMatch(matchId: string): Promise<boolean> {
+  const { error } = await supabase.from("matches").update({ status: "locked" }).eq("id", matchId);
+  if (error) return false;
+  await reloadAll();
   return true;
 }
 
-/** Sblocca una partita bloccata (la rimette su scheduled). */
-export function unlockMatch(matchId: string): boolean {
+export async function unlockMatch(matchId: string): Promise<boolean> {
   const m = getMatch(matchId);
   if (!m || m.status !== "locked") return false;
-  m.status = "scheduled";
-  notify();
+  const { error } = await supabase.from("matches").update({ status: "scheduled" }).eq("id", matchId);
+  if (error) return false;
+  await reloadAll();
   return true;
 }
 
-/** "Ricalcola tutto": non c'è cache, ma forza il refresh di ogni vista. */
-export function recomputeAll() {
-  notify();
+export async function recomputeAll(): Promise<void> {
+  // Server-side recompute via RPC; admin-only enforced server-side.
+  await supabase.rpc("recalculate_all_matches");
+  await reloadAll();
 }
-
