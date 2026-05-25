@@ -629,8 +629,8 @@ export async function deleteMatch(id: string): Promise<{ ok: true } | { ok: fals
 }
 
 // ============= TEAM/PLAYER UPSERT (CSV import) =============
-export async function upsertTeams(rows: { name: string; slug?: string }[]) {
-  const { error } = await supabase.from("teams").upsert(rows, { onConflict: "slug" });
+export async function upsertTeams(rows: { name: string; slug?: string | null }[]) {
+  const { error } = await supabase.from("teams").insert(rows);
   if (error) throw error;
   await reloadAll();
 }
