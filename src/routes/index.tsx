@@ -67,8 +67,11 @@ function HomePage() {
         <div>
           <SectionHeader title="Top 5 squadre" link="/classifica" />
           <div className="rounded-xl border bg-card overflow-hidden">
-            {standings.map((s, i) => {
-              const t = getTeam(s.teamId)!;
+            {standings.length === 0 ? (
+              <div className="text-sm text-muted-foreground text-center py-6">Nessuna squadra ancora.</div>
+            ) : standings.map((s, i) => {
+              const t = getTeam(s.teamId);
+              if (!t) return null;
               return (
                 <Link to="/squadre/$teamId" params={{ teamId: t.id }} key={s.teamId} className="flex items-center gap-3 px-3 py-2.5 border-b last:border-0 hover:bg-secondary/50">
                   <span className="w-6 text-center font-bold text-muted-foreground text-sm">{i + 1}</span>
