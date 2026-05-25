@@ -43,8 +43,16 @@ function HomePage() {
       </section>
 
       {/* Featured */}
-      <SectionHeader title="In evidenza" />
-      <div className="mb-2"><MatchCard match={featured} /></div>
+      {featured ? (
+        <>
+          <SectionHeader title="In evidenza" />
+          <div className="mb-2"><MatchCard match={featured} /></div>
+        </>
+      ) : (
+        <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground mb-4">
+          Il calendario verrà pubblicato a breve.
+        </div>
+      )}
 
       {/* Today */}
       <SectionHeader title="Partite di oggi" link="/calendario" />
