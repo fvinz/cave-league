@@ -439,7 +439,7 @@ function ImportPage() {
           </label>
         </div>
         <button
-          disabled={!result || errorCount > 0 || validRows === 0}
+          disabled={!result || errorCount > 0 || validRows === 0 || importing}
           onClick={runImport}
           className="w-full bg-primary text-primary-foreground font-semibold py-2.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
