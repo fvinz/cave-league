@@ -237,16 +237,52 @@ function ImportPage() {
     setFileName(null);
   };
 
-  const runImport = () => {
+  const runImport = async () => {
     if (!result) return;
     if (errorCount > 0) {
       toast.error(`Impossibile importare: ${errorCount} errore/i da correggere`);
       return;
     }
-    const importedCount = skipDuplicates ? validRows - dupExisting : validRows;
-    toast.success(`Import simulato · ${importedCount} record processati`, {
-      description: skipDuplicates ? `${dupExisting} duplicati saltati` : `${dupExisting} record aggiornati`,
-    });
+    setImporting(true);
+    try {
+      const rows = result.rows.filter(r => r.issues.every(i => i.severity !== "error"));
+      const fresh = skipDuplicates ? rows.filter(r => r.duplicate !== "existing") : rows;
+
+      if (type === "squadre") {
+        await upsertTeams(fresh.map(r => ({ name: r.data.nome, slug: r.data.id || null })));
+      } else if (type === "giocatori") {
+        const teamByCsvId: Record<string, string> = {};
+        teams.forEach(t => { teamByCsvId[t.id] = t.id; });
+        await upsertPlayers(fresh.map(r => ({
+          full_name: r.data.nome,
+          team_id: r.data.team_id,
+          role: r.data.ruolo as PlayerRole,
+          jersey_number: r.data.numero ? parseInt(r.data.numero) : null,
+        })));
+      } else {
+        for (const r of fresh) {
+          const phase = (r.data.fase || "regular") as MatchPhase;
+          const res = await upsertMatch({
+            phase,
+            matchday: parseInt(r.data.giornata || "1"),
+            date: new Date(r.data.data_iso).toISOString(),
+            homeTeamId: r.data.home_id || null,
+            awayTeamId: r.data.away_id || null,
+            venue: r.data.venue || "Campo Centrale Cave",
+            status: "scheduled",
+          });
+          if (!res.ok) throw new Error(res.error);
+        }
+      }
+      toast.success(`Import completato · ${fresh.length} record`);
+      setText("");
+      setFileName(null);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Errore sconosciuto";
+      toast.error("Import fallito", { description: msg });
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
