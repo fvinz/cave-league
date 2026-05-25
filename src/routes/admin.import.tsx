@@ -2,7 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AdminShell } from "@/components/AdminShell";
-import { teams, players, matches, getTeam } from "@/lib/mockData";
+import {
+  teams, players, matches, getTeam,
+  upsertTeams, upsertPlayers, upsertMatch,
+  useStoreVersion,
+  type PlayerRole, type MatchPhase,
+} from "@/lib/mockData";
 import { Upload, FileText, CheckCircle2, AlertTriangle, XCircle, Copy, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/import")({
