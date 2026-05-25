@@ -43,23 +43,36 @@ function AdminPartita() {
   // pool of selectable matches (con squadre definite, non lockate per default)
   const playable = useMemo(
     () => allMatches.filter(m => m.homeTeamId && m.awayTeamId),
-    [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allMatches.length],
   );
   const initial =
     playable.find(m => m.status === "live") ??
     playable.find(m => m.status === "scheduled") ??
     playable[0];
 
-  const [selectedId, setSelectedId] = useState(initial.id);
-  const match = playable.find(m => m.id === selectedId) ?? initial;
+  const [selectedId, setSelectedId] = useState<string | null>(initial?.id ?? null);
+  const match = playable.find(m => m.id === selectedId) ?? initial ?? null;
 
   const [activeSide, setActiveSide] = useState<"home" | "away">("home");
-  const [clock, setClock] = useState<number>(match.status === "live" ? 25 : 0);
+  const [clock, setClock] = useState<number>(match?.status === "live" ? 25 : 0);
   const [pickerEvent, setPickerEvent] = useState<
     { side: "home" | "away"; type: "goal" | "own_goal"; weight: 1 | 2; label: string } | null
   >(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmLock, setConfirmLock] = useState(false);
+
+  if (!match) {
+    return (
+      <AdminShell>
+        <h1 className="text-2xl font-black mb-2">Gestione partita</h1>
+        <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+          Nessuna partita con squadre definite. Crea o assegna squadre dal{" "}
+          <a href="/admin/calendario" className="text-primary font-semibold underline">calendario admin</a>.
+        </div>
+      </AdminShell>
+    );
+  }
 
   const home = getTeam(match.homeTeamId)!;
   const away = getTeam(match.awayTeamId)!;
