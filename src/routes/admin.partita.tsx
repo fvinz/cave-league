@@ -175,7 +175,7 @@ function AdminPartita() {
       <label className="block mb-4">
         <span className="block text-[11px] uppercase tracking-wider font-bold text-muted-foreground mb-1.5">Partita selezionata</span>
         <select
-          value={selectedId}
+          value={selectedId ?? ""}
           onChange={e => switchMatch(e.target.value)}
           className="w-full bg-background border rounded-lg px-3 py-2.5 text-sm font-semibold"
         >
