@@ -201,10 +201,12 @@ function validate(type: ImportType, raw: string): ParsedResult {
 }
 
 function ImportPage() {
+  useStoreVersion();
   const [type, setType] = useState<ImportType>("squadre");
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [skipDuplicates, setSkipDuplicates] = useState(true);
+  const [importing, setImporting] = useState(false);
 
   const tpl = TEMPLATES[type];
   const result = useMemo<ParsedResult | null>(() => (text.trim() ? validate(type, text) : null), [type, text]);
