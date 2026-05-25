@@ -61,10 +61,12 @@ function toLocalInput(iso: string): string {
 }
 
 function AdminCalendario() {
-  const [list, setList] = useState<Match[]>(initialMatches);
+  useStoreVersion();
+  const list = allMatches;
   const [phaseFilter, setPhaseFilter] = useState<"all" | MatchPhase>("all");
   const [editor, setEditor] = useState<{ mode: "create" | "edit"; draft: Draft } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Match | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const filtered = useMemo(
     () => list.filter(m => phaseFilter === "all" || m.phase === phaseFilter)
@@ -72,7 +74,6 @@ function AdminCalendario() {
     [list, phaseFilter],
   );
 
-  // group by matchday
   const grouped = useMemo(() => {
     const g = new Map<number, Match[]>();
     for (const m of filtered) {
@@ -93,7 +94,7 @@ function AdminCalendario() {
       draft: {
         id: m.id,
         phase: m.phase,
-        matchday: m.matchday,
+        matchday: m.matchday || 1,
         date: toLocalInput(m.date),
         homeTeamId: m.homeTeamId ?? "",
         awayTeamId: m.awayTeamId ?? "",
@@ -105,50 +106,39 @@ function AdminCalendario() {
     });
   };
 
-  const save = () => {
+  const save = async () => {
     if (!editor) return;
     const d = editor.draft;
-    // validations
     if (!d.date) return toast.error("Data e ora obbligatorie");
     const hasHomeTeam = !!d.homeTeamId;
     const hasAwayTeam = !!d.awayTeamId;
-    const isKnockout = d.phase !== "regular";
     if (!hasHomeTeam && !d.homeLabel) return toast.error("Specifica squadra home o etichetta placeholder");
     if (!hasAwayTeam && !d.awayLabel) return toast.error("Specifica squadra away o etichetta placeholder");
     if (hasHomeTeam && hasAwayTeam && d.homeTeamId === d.awayTeamId) return toast.error("Le due squadre devono essere diverse");
 
-    const id = d.id || `${d.phase === "regular" ? "rs" : d.phase === "quarter" ? "qf" : d.phase === "semi" ? "sf" : d.phase === "third" ? "tp" : "ff"}-${Date.now().toString(36)}`;
-    if (editor.mode === "create" && list.some(m => m.id === id)) return toast.error(`ID "${id}" già esistente`);
-
-    const next: Match = {
-      id,
+    setSaving(true);
+    const res = await upsertMatch({
+      id: d.id || undefined,
       phase: d.phase,
       matchday: d.matchday,
       date: new Date(d.date).toISOString(),
       homeTeamId: hasHomeTeam ? d.homeTeamId : null,
       awayTeamId: hasAwayTeam ? d.awayTeamId : null,
-      homeLabel: !hasHomeTeam ? d.homeLabel : undefined,
-      awayLabel: !hasAwayTeam ? d.awayLabel : undefined,
-      homeScore: editor.mode === "edit" ? list.find(m => m.id === id)?.homeScore ?? null : null,
-      awayScore: editor.mode === "edit" ? list.find(m => m.id === id)?.awayScore ?? null : null,
-      status: d.status,
+      homeLabel: hasHomeTeam ? undefined : d.homeLabel,
+      awayLabel: hasAwayTeam ? undefined : d.awayLabel,
       venue: d.venue,
-      highlight: isKnockout ? phaseLabel[d.phase] : list.find(m => m.id === id)?.highlight,
-      shootoutWinner: list.find(m => m.id === id)?.shootoutWinner,
-      events: editor.mode === "edit" ? list.find(m => m.id === id)?.events ?? [] : [],
-    };
-
-    setList(prev => {
-      const exists = prev.some(m => m.id === id);
-      return exists ? prev.map(m => (m.id === id ? next : m)) : [...prev, next];
+      status: d.status,
     });
+    setSaving(false);
+    if (!res.ok) return toast.error(res.error);
     toast.success(editor.mode === "create" ? "Partita creata" : "Partita aggiornata");
     setEditor(null);
   };
 
-  const remove = (m: Match) => {
-    setList(prev => prev.filter(x => x.id !== m.id));
+  const remove = async (m: Match) => {
+    const res = await deleteMatch(m.id);
     setConfirmDelete(null);
+    if (!res.ok) return toast.error(res.error);
     toast.success("Partita eliminata");
   };
 
