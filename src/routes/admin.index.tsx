@@ -69,7 +69,7 @@ function AdminDashboard() {
           <span>{scheduledCount} programmate</span>
         </div>
         <div className="h-3 bg-secondary rounded-full overflow-hidden">
-          <div className="h-full bg-primary" style={{ width: `${(finishedCount / matches.length) * 100}%` }} />
+          <div className="h-full bg-primary" style={{ width: `${matches.length > 0 ? (finishedCount / matches.length) * 100 : 0}%` }} />
         </div>
       </div>
 
@@ -87,14 +87,18 @@ function AdminDashboard() {
         })}
       </div>
 
-      <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mt-8 mb-3">Capolista</h2>
-      <div className="rounded-xl border bg-card p-4 flex items-center justify-between">
-        <div>
-          <div className="text-xs text-muted-foreground">In testa con {standings[0].points} punti</div>
-          <div className="text-xl font-black mt-0.5">{teams.find(t => t.id === standings[0].teamId)?.name}</div>
-        </div>
-        <div className="text-3xl">🏆</div>
-      </div>
+      {standings.length > 0 && (
+        <>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mt-8 mb-3">Capolista</h2>
+          <div className="rounded-xl border bg-card p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-muted-foreground">In testa con {standings[0].points} punti</div>
+              <div className="text-xl font-black mt-0.5">{teams.find(t => t.id === standings[0].teamId)?.name}</div>
+            </div>
+            <div className="text-3xl">🏆</div>
+          </div>
+        </>
+      )}
     </AdminShell>
   );
 }

@@ -561,3 +561,83 @@ export async function recomputeAll(): Promise<void> {
   await supabase.rpc("recalculate_all_matches");
   await reloadAll();
 }
+
+// ============= MATCHDAY HELPERS =============
+async function ensureMatchday(matchdayNumber: number, eventDate: string): Promise<string | null> {
+  // find by sort_order, create if missing
+  const { data: existing } = await supabase
+    .from("matchdays")
+    .select("id")
+    .eq("sort_order", matchdayNumber)
+    .maybeSingle();
+  if (existing) return existing.id;
+  const { data: created, error } = await supabase
+    .from("matchdays")
+    .insert({ sort_order: matchdayNumber, title: `Giornata ${matchdayNumber}`, event_date: eventDate })
+    .select("id")
+    .single();
+  if (error) return null;
+  return created.id;
+}
+
+// ============= MATCH CRUD (admin) =============
+export interface MatchUpsertInput {
+  id?: string;
+  phase: MatchPhase;
+  matchday: number;
+  date: string; // ISO
+  homeTeamId: string | null;
+  awayTeamId: string | null;
+  homeLabel?: string;
+  awayLabel?: string;
+  venue: string;
+  status: MatchStatus;
+}
+
+export async function upsertMatch(input: MatchUpsertInput): Promise<{ ok: true } | { ok: false; error: string }> {
+  const stageId = getStageIdByPhase(input.phase);
+  if (!stageId) return { ok: false, error: "Fase sconosciuta." };
+  const matchdayId = await ensureMatchday(input.matchday, input.date.slice(0, 10));
+  const payload = {
+    stage_id: stageId,
+    matchday_id: matchdayId,
+    scheduled_at: input.date,
+    home_team_id: input.homeTeamId,
+    away_team_id: input.awayTeamId,
+    home_placeholder: input.homeTeamId ? null : (input.homeLabel ?? null),
+    away_placeholder: input.awayTeamId ? null : (input.awayLabel ?? null),
+    venue: input.venue,
+    status: input.status,
+  };
+  if (input.id) {
+    const { error } = await supabase.from("matches").update(payload).eq("id", input.id);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    const { error } = await supabase.from("matches").insert(payload);
+    if (error) return { ok: false, error: error.message };
+  }
+  await reloadAll();
+  return { ok: true };
+}
+
+export async function deleteMatch(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  await supabase.from("match_events").delete().eq("match_id", id);
+  const { error } = await supabase.from("matches").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+  await reloadAll();
+  return { ok: true };
+}
+
+// ============= TEAM/PLAYER UPSERT (CSV import) =============
+export async function upsertTeams(rows: { name: string; slug?: string | null }[]) {
+  const { error } = await supabase.from("teams").insert(rows);
+  if (error) throw error;
+  await reloadAll();
+}
+
+export async function upsertPlayers(rows: { full_name: string; team_id: string; role: PlayerRole; jersey_number?: number | null }[]) {
+  const { error } = await supabase.from("players").insert(rows);
+  if (error) throw error;
+  await reloadAll();
+}
+

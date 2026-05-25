@@ -2,7 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AdminShell } from "@/components/AdminShell";
-import { teams, players, matches, getTeam } from "@/lib/mockData";
+import {
+  teams, players, matches, getTeam,
+  upsertTeams, upsertPlayers, upsertMatch,
+  useStoreVersion,
+  type PlayerRole, type MatchPhase,
+} from "@/lib/mockData";
 import { Upload, FileText, CheckCircle2, AlertTriangle, XCircle, Copy, Trash2 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/import")({
@@ -196,10 +201,12 @@ function validate(type: ImportType, raw: string): ParsedResult {
 }
 
 function ImportPage() {
+  useStoreVersion();
   const [type, setType] = useState<ImportType>("squadre");
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [skipDuplicates, setSkipDuplicates] = useState(true);
+  const [importing, setImporting] = useState(false);
 
   const tpl = TEMPLATES[type];
   const result = useMemo<ParsedResult | null>(() => (text.trim() ? validate(type, text) : null), [type, text]);
@@ -230,16 +237,52 @@ function ImportPage() {
     setFileName(null);
   };
 
-  const runImport = () => {
+  const runImport = async () => {
     if (!result) return;
     if (errorCount > 0) {
       toast.error(`Impossibile importare: ${errorCount} errore/i da correggere`);
       return;
     }
-    const importedCount = skipDuplicates ? validRows - dupExisting : validRows;
-    toast.success(`Import simulato · ${importedCount} record processati`, {
-      description: skipDuplicates ? `${dupExisting} duplicati saltati` : `${dupExisting} record aggiornati`,
-    });
+    setImporting(true);
+    try {
+      const rows = result.rows.filter(r => r.issues.every(i => i.severity !== "error"));
+      const fresh = skipDuplicates ? rows.filter(r => r.duplicate !== "existing") : rows;
+
+      if (type === "squadre") {
+        await upsertTeams(fresh.map(r => ({ name: r.data.nome, slug: r.data.id || null })));
+      } else if (type === "giocatori") {
+        const teamByCsvId: Record<string, string> = {};
+        teams.forEach(t => { teamByCsvId[t.id] = t.id; });
+        await upsertPlayers(fresh.map(r => ({
+          full_name: r.data.nome,
+          team_id: r.data.team_id,
+          role: r.data.ruolo as PlayerRole,
+          jersey_number: r.data.numero ? parseInt(r.data.numero) : null,
+        })));
+      } else {
+        for (const r of fresh) {
+          const phase = (r.data.fase || "regular") as MatchPhase;
+          const res = await upsertMatch({
+            phase,
+            matchday: parseInt(r.data.giornata || "1"),
+            date: new Date(r.data.data_iso).toISOString(),
+            homeTeamId: r.data.home_id || null,
+            awayTeamId: r.data.away_id || null,
+            venue: r.data.venue || "Campo Centrale Cave",
+            status: "scheduled",
+          });
+          if (!res.ok) throw new Error(res.error);
+        }
+      }
+      toast.success(`Import completato · ${fresh.length} record`);
+      setText("");
+      setFileName(null);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Errore sconosciuto";
+      toast.error("Import fallito", { description: msg });
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -396,7 +439,7 @@ function ImportPage() {
           </label>
         </div>
         <button
-          disabled={!result || errorCount > 0 || validRows === 0}
+          disabled={!result || errorCount > 0 || validRows === 0 || importing}
           onClick={runImport}
           className="w-full bg-primary text-primary-foreground font-semibold py-2.5 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
