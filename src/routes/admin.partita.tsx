@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AdminShell } from "@/components/AdminShell";
 import { TeamBadge } from "@/components/TeamBadge";
@@ -7,23 +7,31 @@ import {
   matches as allMatches,
   getTeam,
   getTeamPlayers,
+  getPlayer,
   phaseLabel,
   phaseShort,
   useStoreVersion,
+  startFirstHalf,
+  endFirstHalf,
+  startSecondHalf,
+  endSecondHalf,
+  startShootout,
   addMatchEvent,
   undoLastEvent,
-  setMatchStatus,
-  reopenMatch,
-  resetMatch,
   finalizeMatch,
   lockMatch,
   unlockMatch,
+  resetMatch,
+  reopenMatch,
   recomputeAll,
+  type Match,
   type MatchStatus,
+  type MatchPeriod,
+  type EventType,
 } from "@/lib/mockData";
 import {
-  Play, Pause, Square, Plus, Undo2, Trophy, Goal, Shield,
-  RotateCcw, Lock, Unlock, X, CheckCircle2, RefreshCw,
+  Play, Square, Trophy, Shield, RotateCcw, Lock, Unlock, X,
+  CheckCircle2, RefreshCw, Undo2, Goal, AlertCircle,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/partita")({
@@ -31,20 +39,55 @@ export const Route = createFileRoute("/admin/partita")({
   head: () => ({ meta: [{ title: "Gestione partita — Admin" }] }),
 });
 
-const QUICK = [
-  { type: "goal" as const, label: "Goal", icon: Goal, weight: 1 as 1, color: "bg-primary text-primary-foreground" },
-  { type: "goal" as const, label: "Goal x2", icon: Goal, weight: 2 as 2, color: "bg-accent text-accent-foreground" },
-  { type: "own_goal" as const, label: "Autogoal", icon: Shield, weight: 1 as 1, color: "bg-destructive/90 text-destructive-foreground" },
+type QuickEvent = {
+  type: EventType;
+  label: string;
+  weight: 1 | 2;
+  color: string;
+  icon: React.ElementType;
+};
+
+const QUICK_REGULAR: QuickEvent[] = [
+  { type: "goal",        label: "Goal",     weight: 1, color: "bg-primary text-primary-foreground",           icon: Goal },
+  { type: "goal",        label: "Goal ×2",  weight: 2, color: "bg-violet-500 text-white",                     icon: Goal },
+  { type: "own_goal",    label: "Autogoal", weight: 1, color: "bg-destructive/90 text-destructive-foreground", icon: Shield },
+  { type: "yellow_card", label: "Giallo",   weight: 1, color: "bg-yellow-400 text-yellow-950",                 icon: AlertCircle },
+  { type: "red_card",    label: "Rosso",    weight: 1, color: "bg-red-600 text-white",                         icon: AlertCircle },
+];
+const QUICK_SHOOTOUT: QuickEvent[] = [
+  { type: "shootout_goal", label: "Rigore ✓",   weight: 1, color: "bg-emerald-500 text-white", icon: Goal },
+  { type: "shootout_miss", label: "Sbagliato",  weight: 1, color: "bg-rose-500 text-white",    icon: Shield },
 ];
 
-function AdminPartita() {
-  useStoreVersion(); // re-render on any store change
+function statusLabel(s: MatchStatus) {
+  if (s === "live")     return "LIVE";
+  if (s === "finished") return "Conclusa";
+  if (s === "locked")   return "Bloccata";
+  return "Programmata";
+}
 
-  // pool of selectable matches (con squadre definite, non lockate per default)
+function elapsedSeconds(from: string | null, to: string | null): number {
+  if (!from) return 0;
+  const end = to ? new Date(to).getTime() : Date.now();
+  return Math.max(0, Math.floor((end - new Date(from).getTime()) / 1000));
+}
+function fmtTimer(secs: number): string {
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+}
+function periodOf(phase: string | null): MatchPeriod {
+  if (phase === "shootout")    return "shootout";
+  if (phase === "second_half") return "second_half";
+  return "first_half";
+}
+
+// ── main ──────────────────────────────────────────────────────────────────────
+function AdminPartita() {
+  const v = useStoreVersion();
+
   const playable = useMemo(
     () => allMatches.filter(m => m.homeTeamId && m.awayTeamId),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allMatches.length],
+    [v],
   );
   const initial =
     playable.find(m => m.status === "live") ??
@@ -53,22 +96,26 @@ function AdminPartita() {
 
   const [selectedId, setSelectedId] = useState<string | null>(initial?.id ?? null);
   const match = playable.find(m => m.id === selectedId) ?? initial ?? null;
-
   const [activeSide, setActiveSide] = useState<"home" | "away">("home");
-  const [clock, setClock] = useState<number>(match?.status === "live" ? 25 : 0);
-  const [pickerEvent, setPickerEvent] = useState<
-    { side: "home" | "away"; type: "goal" | "own_goal"; weight: 1 | 2; label: string } | null
-  >(null);
+  const [pickerEvent, setPickerEvent] = useState<(QuickEvent & { side: "home" | "away" }) | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmLock, setConfirmLock] = useState(false);
+
+  // 1 Hz tick for the live timer display
+  const [tick, setTick] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    intervalRef.current = setInterval(() => setTick(t => t + 1), 1000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, []);
 
   if (!match) {
     return (
       <AdminShell>
         <h1 className="text-2xl font-black mb-2">Gestione partita</h1>
         <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          Nessuna partita con squadre definite. Crea o assegna squadre dal{" "}
-          <a href="/admin/calendario" className="text-primary font-semibold underline">calendario admin</a>.
+          Nessuna partita con squadre definite.{" "}
+          <a href="/admin/calendario" className="text-primary font-semibold underline">Crea una partita</a>.
         </div>
       </AdminShell>
     );
@@ -76,107 +123,115 @@ function AdminPartita() {
 
   const home = getTeam(match.homeTeamId)!;
   const away = getTeam(match.awayTeamId)!;
-  const isLocked = match.status === "locked";
+  const isLocked   = match.status === "locked";
   const isFinished = match.status === "finished";
-  const homeScore = match.homeScore ?? 0;
-  const awayScore = match.awayScore ?? 0;
-  const tied = homeScore === awayScore;
+  const isLive     = match.status === "live";
+  const homeScore  = match.homeScore ?? 0;
+  const awayScore  = match.awayScore ?? 0;
+  const phase      = match.currentPhase;
 
-  const switchMatch = (id: string) => {
-    setSelectedId(id);
-    const m = playable.find(x => x.id === id)!;
-    setClock(m.status === "live" ? 25 : 0);
+  // shootout sub-totals (from events, not from total score)
+  const homeSO = match.events.filter(e => e.period === "shootout" && e.team === "home" && e.type === "shootout_goal").length;
+  const awaySO = match.events.filter(e => e.period === "shootout" && e.team === "away" && e.type === "shootout_goal").length;
+  const regHome = homeScore - homeSO;
+  const regAway = awayScore - awaySO;
+
+  // live timer
+  const timerSecs = (() => {
+    void tick;
+    if (phase === "first_half")  return elapsedSeconds(match.firstHalfStartedAt,  null);
+    if (phase === "half_time")   return elapsedSeconds(match.firstHalfStartedAt,  match.firstHalfEndedAt);
+    if (phase === "second_half") return elapsedSeconds(match.secondHalfStartedAt, null);
+    if (phase === "shootout")    return elapsedSeconds(match.secondHalfEndedAt ?? match.secondHalfStartedAt, null);
+    if (!phase && match.secondHalfEndedAt)
+      return elapsedSeconds(match.secondHalfStartedAt, match.secondHalfEndedAt);
+    return 0;
+  })();
+  const timerLabel =
+    phase === "first_half"  ? "1° TEMPO" :
+    phase === "half_time"   ? "INTERVALLO" :
+    phase === "second_half" ? "2° TEMPO" :
+    phase === "shootout"    ? "RIGORI" :
+    match.secondHalfEndedAt ? "FINITA" : "—";
+
+  const autoMinute = (() => {
+    if (phase === "first_half")  return Math.min(20, Math.ceil(timerSecs / 60)) || 1;
+    if (phase === "second_half") return Math.min(40, 20 + Math.ceil(timerSecs / 60)) || 21;
+    if (phase === "shootout")    return match.events.filter(e => e.period === "shootout").length + 1;
+    return 1;
+  })();
+
+  const canRegister  = isLive && phase !== "half_time" && !isFinished && !isLocked;
+  const inShootout   = phase === "shootout";
+  const quickButtons = inShootout ? QUICK_SHOOTOUT : QUICK_REGULAR;
+  const secondHalfDone = !phase && !!match.secondHalfEndedAt;
+
+  const guard = (fn: () => void) => {
+    if (isLocked) { toast.error("Partita bloccata — sbloccala prima."); return; }
+    fn();
   };
 
-  const guard = (action: () => void) => {
-    if (isLocked) { toast.error("Partita bloccata", { description: "Sbloccala per modificare." }); return; }
-    action();
+  const doStart1   = () => guard(async () => { const r = await startFirstHalf(match.id);  r.ok ? toast.success("1° tempo avviato") : toast.error(r.error); });
+  const doEnd1     = () => guard(async () => { const r = await endFirstHalf(match.id);    r.ok ? toast.info("Intervallo") : toast.error(r.error); });
+  const doStart2   = () => guard(async () => { const r = await startSecondHalf(match.id); r.ok ? toast.success("2° tempo avviato") : toast.error(r.error); });
+  const doEnd2     = () => guard(async () => {
+    const r = await endSecondHalf(match.id);
+    if (!r.ok) { toast.error(r.error); return; }
+    toast.info("Fine 2° tempo"); setConfirmClose(true);
+  });
+  const doSO       = () => guard(async () => { const r = await startShootout(match.id);   r.ok ? toast.success("Shootout avviato") : toast.error(r.error); });
+  const doReset    = () => guard(async () => { if (await resetMatch(match.id))  toast.info("Partita resettata"); });
+  const doReopen   = () => guard(async () => { if (await reopenMatch(match.id)) toast.info("Partita riaperta"); });
+  const doUnlock   = async () => { if (await unlockMatch(match.id)) toast.info("Partita sbloccata"); };
+  const doLock     = async () => { if (await lockMatch(match.id)) { toast.success("Bloccata"); setConfirmLock(false); } };
+  const doUndo     = async () => { if (await undoLastEvent(match.id)) toast.info("Ultima azione annullata"); };
+
+  const finishDirect = async () => {
+    const r = await finalizeMatch(match.id, { type: "direct" });
+    r.ok ? (setConfirmClose(false), toast.success(`Partita chiusa ${homeScore}–${awayScore}`)) : toast.error(r.error);
   };
-
-  const start = () => guard(async () => {
-    await setMatchStatus(match.id, "live");
-    toast.success("Partita avviata", { description: `${home.shortName} vs ${away.shortName}` });
-  });
-
-  const togglePause = () => guard(async () => {
-    await setMatchStatus(match.id, match.status === "live" ? "scheduled" : "live");
-  });
-
-  const doReset = () => guard(async () => {
-    if (await resetMatch(match.id)) toast.info("Partita resettata");
-  });
-
-  const doReopen = () => guard(async () => {
-    if (await reopenMatch(match.id)) toast.info("Partita riaperta");
-  });
+  const finishShootout = async (winner: "home" | "away") => {
+    const r = await finalizeMatch(match.id, { type: "shootout", winner });
+    r.ok ? (setConfirmClose(false), toast.success(`Vittoria ai rigori: ${winner === "home" ? home.shortName : away.shortName}`)) : toast.error(r.error);
+  };
 
   const onPickPlayer = async (playerId: string) => {
     if (!pickerEvent) return;
     const res = await addMatchEvent(match.id, {
-      team: pickerEvent.side,
-      type: pickerEvent.type,
-      playerId,
-      weight: pickerEvent.weight,
-      minute: clock || 1,
-      label: pickerEvent.label,
+      team: pickerEvent.side, type: pickerEvent.type,
+      playerId, weight: pickerEvent.weight, minute: autoMinute,
+      period: periodOf(match.currentPhase),
     });
     if (!res.ok) toast.error(res.error);
-    else toast.success(`${pickerEvent.label} registrato`, {
-      description: `${(pickerEvent.side === "home" ? home : away).shortName} · ${getPlayerName(playerId)}`,
-    });
+    else {
+      const pName = getPlayer(playerId)?.name ?? "—";
+      toast.success(`${pickerEvent.label} registrato`, { description: `${(pickerEvent.side === "home" ? home : away).shortName} · ${pName}` });
+    }
     setPickerEvent(null);
-  };
-
-  const undo = async () => {
-    if (await undoLastEvent(match.id)) toast.info("Ultima azione annullata");
-  };
-
-  const bumpClock = (delta: number) => setClock(c => Math.max(0, Math.min(50, c + delta)));
-
-  const finishDirect = async () => {
-    const res = await finalizeMatch(match.id, { type: "direct" });
-    if (!res.ok) { toast.error(res.error); return; }
-    setConfirmClose(false);
-    toast.success("Partita chiusa", { description: `${homeScore} - ${awayScore}` });
-  };
-
-  const finishShootout = async (winner: "home" | "away") => {
-    const res = await finalizeMatch(match.id, { type: "shootout", winner });
-    if (!res.ok) { toast.error(res.error); return; }
-    setConfirmClose(false);
-    toast.success(`Vittoria ai rigori: ${winner === "home" ? home.shortName : away.shortName}`);
-  };
-
-  const doLock = async () => {
-    if (await lockMatch(match.id)) toast.success("Partita bloccata", { description: "Risultato definitivo." });
-    setConfirmLock(false);
-  };
-
-  const doUnlock = async () => {
-    if (await unlockMatch(match.id)) toast.info("Partita sbloccata");
   };
 
   return (
     <AdminShell>
+      {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-black">Gestione partita</h1>
-          <p className="text-sm text-muted-foreground">Gli eventi aggiornano in tempo reale classifica, marcatori e statistiche.</p>
+          <p className="text-sm text-muted-foreground">Classifica, marcatori e statistiche si aggiornano in tempo reale.</p>
         </div>
         <button
-          onClick={() => { recomputeAll(); toast.success("Tutti i dati derivati ricalcolati."); }}
+          onClick={() => { recomputeAll(); toast.success("Dati ricalcolati."); }}
           className="shrink-0 px-3 py-2 rounded-lg border bg-card text-xs font-bold flex items-center gap-1.5 hover:bg-secondary/50"
-          title="Forza ricalcolo classifica e statistiche"
         >
-          <RefreshCw className="w-3.5 h-3.5" /> Ricalcola tutto
+          <RefreshCw className="w-3.5 h-3.5" /> Ricalcola
         </button>
       </div>
 
+      {/* Match selector */}
       <label className="block mb-4">
-        <span className="block text-[11px] uppercase tracking-wider font-bold text-muted-foreground mb-1.5">Partita selezionata</span>
+        <span className="block text-[11px] uppercase tracking-wider font-bold text-muted-foreground mb-1.5">Partita</span>
         <select
           value={selectedId ?? ""}
-          onChange={e => switchMatch(e.target.value)}
+          onChange={e => setSelectedId(e.target.value)}
           className="w-full bg-background border rounded-lg px-3 py-2.5 text-sm font-semibold"
         >
           {playable.map(m => (
@@ -191,31 +246,38 @@ function AdminPartita() {
       <section className="rounded-2xl border bg-card p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-            {phaseLabel[match.phase]} · giornata {match.matchday}
+            {phaseLabel[match.phase]} · G{match.matchday}
           </span>
-          <StatusBadge status={match.status} />
+          <PhaseBadge status={match.status} phase={phase} />
         </div>
 
-        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <TeamColumn team={home} side="home" active={activeSide === "home"} onSelect={() => setActiveSide("home")} />
-          <div className="flex items-end gap-2 text-5xl sm:text-6xl font-black tabular-nums">
-            <span className={activeSide === "home" ? "text-primary" : ""}>{homeScore}</span>
-            <span className="text-2xl text-muted-foreground mb-1.5">:</span>
-            <span className={activeSide === "away" ? "text-primary" : ""}>{awayScore}</span>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 mb-3">
+          <TeamCol team={home} side="home" active={activeSide === "home"} onSelect={() => setActiveSide("home")} />
+          <div className="text-center">
+            <div className="flex items-end gap-1.5 text-5xl sm:text-6xl font-black tabular-nums justify-center">
+              <span className={activeSide === "home" ? "text-primary" : ""}>{homeScore}</span>
+              <span className="text-2xl text-muted-foreground mb-1.5">:</span>
+              <span className={activeSide === "away" ? "text-primary" : ""}>{awayScore}</span>
+            </div>
+            {(homeSO > 0 || awaySO > 0) && (
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                reg. {regHome}–{regAway} · rig. {homeSO}–{awaySO}
+              </div>
+            )}
           </div>
-          <TeamColumn team={away} side="away" active={activeSide === "away"} onSelect={() => setActiveSide("away")} />
+          <TeamCol team={away} side="away" active={activeSide === "away"} onSelect={() => setActiveSide("away")} />
         </div>
 
-        <div className="mt-4 flex items-center justify-center gap-2">
-          <button onClick={() => bumpClock(-1)} className="w-8 h-8 rounded-md bg-secondary font-bold">-</button>
-          <div className="px-4 py-1.5 rounded-md bg-background border text-center min-w-[80px]">
-            <div className="text-[10px] uppercase text-muted-foreground font-bold">Minuto</div>
-            <div className="text-lg font-black tabular-nums leading-none">{clock}'</div>
+        {/* Timer */}
+        <div className="flex justify-center mb-4">
+          <div className="px-5 py-2 rounded-xl bg-background border text-center min-w-[130px]">
+            <div className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">{timerLabel}</div>
+            <div className="text-2xl font-black tabular-nums leading-none mt-0.5">{fmtTimer(timerSecs)}</div>
           </div>
-          <button onClick={() => bumpClock(1)} className="w-8 h-8 rounded-md bg-secondary font-bold">+</button>
         </div>
 
-        <div className="flex flex-wrap gap-2 mt-4 justify-center">
+        {/* Phase buttons */}
+        <div className="flex flex-wrap gap-2 justify-center">
           {isLocked ? (
             <button onClick={doUnlock} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
               <Unlock className="w-4 h-4" /> Sblocca
@@ -229,33 +291,48 @@ function AdminPartita() {
                 <Lock className="w-4 h-4" /> Blocca risultato
               </button>
             </>
-          ) : match.status === "live" ? (
-            <button onClick={togglePause} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
-              <Pause className="w-4 h-4" /> Pausa
+          ) : phase === null && !match.secondHalfEndedAt ? (
+            <button onClick={doStart1} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-1.5">
+              <Play className="w-4 h-4" /> Avvia 1° tempo
             </button>
-          ) : (
-            <button onClick={start} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-1.5">
-              <Play className="w-4 h-4" /> Avvia
+          ) : phase === "first_half" ? (
+            <button onClick={doEnd1} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
+              <Square className="w-4 h-4" /> Fine 1° tempo
             </button>
-          )}
+          ) : phase === "half_time" ? (
+            <button onClick={doStart2} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-1.5">
+              <Play className="w-4 h-4" /> Avvia 2° tempo
+            </button>
+          ) : phase === "second_half" ? (
+            <button onClick={doEnd2} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
+              <Square className="w-4 h-4" /> Fine 2° tempo
+            </button>
+          ) : phase === "shootout" ? (
+            <button onClick={() => setConfirmClose(true)} className="px-3 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-semibold flex items-center gap-1.5">
+              <Trophy className="w-4 h-4" /> Chiudi shootout
+            </button>
+          ) : secondHalfDone ? (
+            <>
+              <button onClick={() => setConfirmClose(true)} className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold flex items-center gap-1.5">
+                <Trophy className="w-4 h-4" /> Chiudi partita
+              </button>
+              {regHome === regAway && (
+                <button onClick={doSO} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
+                  <Play className="w-4 h-4" /> Avvia rigori
+                </button>
+              )}
+            </>
+          ) : null}
 
           {!isLocked && !isFinished && (
-            <button onClick={doReset} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
-              <RotateCcw className="w-4 h-4" /> Reset
-            </button>
-          )}
-
-          <button onClick={undo} disabled={match.events.length === 0 || isLocked} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5 disabled:opacity-40">
-            <Undo2 className="w-4 h-4" /> Undo
-          </button>
-
-          {!isFinished && !isLocked && (
-            <button
-              onClick={() => setConfirmClose(true)}
-              className="px-3 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-semibold flex items-center gap-1.5"
-            >
-              <Square className="w-4 h-4" /> Chiudi
-            </button>
+            <>
+              <button onClick={doReset} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5">
+                <RotateCcw className="w-4 h-4" /> Reset
+              </button>
+              <button onClick={doUndo} disabled={match.events.length === 0} className="px-3 py-2 rounded-lg bg-secondary text-sm font-semibold flex items-center gap-1.5 disabled:opacity-40">
+                <Undo2 className="w-4 h-4" /> Undo
+              </button>
+            </>
           )}
         </div>
       </section>
@@ -266,35 +343,34 @@ function AdminPartita() {
           const t = side === "home" ? home : away;
           const isActive = activeSide === side;
           return (
-            <button
-              key={side}
-              onClick={() => setActiveSide(side)}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-colors ${
-                isActive ? "border-primary bg-primary/5" : "border-transparent bg-card"
-              }`}
+            <button key={side} onClick={() => setActiveSide(side)}
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-colors ${isActive ? "border-primary bg-primary/5" : "border-transparent bg-card"}`}
             >
               <TeamBadge teamId={t.id} size={22} />
               <span className="text-sm font-bold truncate flex-1 text-left">{t.shortName}</span>
-              <span className="text-[10px] uppercase font-bold text-muted-foreground">{side}</span>
+              {inShootout && (
+                <span className="text-xs font-black tabular-nums text-primary">
+                  {side === "home" ? homeSO : awaySO} rig.
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* Quick event buttons */}
+      {/* Event buttons */}
       <section className="rounded-xl border bg-card p-3 mb-4">
         <div className="text-[11px] uppercase tracking-wider font-bold text-muted-foreground mb-2 px-1">
-          Evento per {(activeSide === "home" ? home : away).name}
+          {inShootout
+            ? `Rigori · ${(activeSide === "home" ? home : away).shortName}`
+            : `Evento · ${(activeSide === "home" ? home : away).name}`}
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          {QUICK.map(q => {
+        <div className={`grid gap-2 ${quickButtons.length <= 2 ? "grid-cols-2" : "grid-cols-3 sm:grid-cols-5"}`}>
+          {quickButtons.map(q => {
             const Icon = q.icon;
-            const disabled = isLocked || isFinished;
             return (
-              <button
-                key={q.label}
-                disabled={disabled}
-                onClick={() => setPickerEvent({ side: activeSide, type: q.type, weight: q.weight, label: q.label })}
+              <button key={q.label} disabled={!canRegister}
+                onClick={() => setPickerEvent({ ...q, side: activeSide })}
                 className={`flex flex-col items-center justify-center gap-1 py-4 rounded-lg font-semibold text-xs ${q.color} disabled:opacity-40 active:scale-[0.97] transition-transform`}
               >
                 <Icon className="w-5 h-5" />
@@ -303,48 +379,37 @@ function AdminPartita() {
             );
           })}
         </div>
-        {isLocked && (
-          <p className="text-[11px] text-muted-foreground mt-2 px-1 flex items-center gap-1">
-            <Lock className="w-3 h-3" /> Partita bloccata: nessuna modifica consentita.
+        {!canRegister && !isLocked && !isFinished && (
+          <p className="text-[11px] text-muted-foreground mt-2 px-1">
+            {phase === "half_time" ? "Intervallo — avvia il 2° tempo per registrare eventi." : "Avvia un tempo per registrare eventi."}
           </p>
         )}
+        {isLocked && <p className="text-[11px] text-muted-foreground mt-2 px-1 flex items-center gap-1"><Lock className="w-3 h-3" /> Partita bloccata.</p>}
       </section>
 
       {/* Timeline */}
       <section>
-        <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 px-1">Timeline · {match.events.length} eventi</h2>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 px-1">
+          Timeline · {match.events.length} eventi
+        </h2>
         <div className="rounded-xl border bg-card overflow-hidden">
           {match.events.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-8">Nessun evento registrato.</div>
-          ) : match.events.map(ev => {
-            const sideTeam = ev.team === "home" ? home : away;
-            const isOwn = ev.type === "own_goal";
-            return (
-              <div key={ev.id} className="flex items-center gap-3 px-3 py-2.5 border-b last:border-0">
-                <span className="w-10 text-center font-bold tabular-nums text-sm">{ev.minute}'</span>
-                <TeamBadge teamId={sideTeam.id} size={20} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold truncate">{getPlayerName(ev.playerId)}</div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {ev.label ?? (isOwn ? "Autogoal" : "Goal")}
-                    {isOwn && <span className="ml-1 italic">(punto a {(ev.team === "home" ? away : home).shortName})</span>}
-                  </div>
-                </div>
-                {ev.weight > 1 && <span className="text-[10px] font-bold bg-accent/20 text-accent-foreground px-1.5 py-0.5 rounded">×{ev.weight}</span>}
-                <Goal className={`w-4 h-4 ${isOwn ? "text-destructive" : "text-primary"}`} />
-              </div>
-            );
-          })}
+          ) : (
+            <Timeline events={[...match.events].reverse()} home={home} away={away} />
+          )}
         </div>
       </section>
 
       {isFinished && (
-        <div className="mt-4 rounded-xl border border-success/40 bg-success/5 p-4 flex items-center gap-3">
-          <Trophy className="w-5 h-5 text-success shrink-0" />
+        <div className="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-4 flex items-center gap-3">
+          <Trophy className="w-5 h-5 text-emerald-500 shrink-0" />
           <div className="text-sm flex-1">
-            <div className="font-bold">Partita chiusa: {homeScore} - {awayScore}</div>
+            <div className="font-bold">Partita chiusa: {homeScore} – {awayScore}</div>
             {match.shootoutWinner && (
-              <div className="text-xs text-muted-foreground">Vittoria ai rigori: {(match.shootoutWinner === "home" ? home : away).name}</div>
+              <div className="text-xs text-muted-foreground">
+                Vittoria ai rigori: {(match.shootoutWinner === "home" ? home : away).name}
+              </div>
             )}
           </div>
           {isLocked
@@ -365,11 +430,10 @@ function AdminPartita() {
 
       {confirmClose && (
         <CloseDialog
-          tied={tied}
-          home={home.name}
-          away={away.name}
-          homeScore={homeScore}
-          awayScore={awayScore}
+          home={home.name} away={away.name}
+          homeScore={homeScore} awayScore={awayScore}
+          homeSO={homeSO} awaySO={awaySO}
+          inShootout={inShootout}
           onCancel={() => setConfirmClose(false)}
           onDirect={finishDirect}
           onShootout={finishShootout}
@@ -377,7 +441,7 @@ function AdminPartita() {
       )}
 
       {confirmLock && (
-        <ConfirmLockDialog
+        <LockDialog
           home={home.shortName} away={away.shortName}
           homeScore={homeScore} awayScore={awayScore}
           onCancel={() => setConfirmLock(false)}
@@ -388,38 +452,93 @@ function AdminPartita() {
   );
 }
 
-// ---------- helpers ----------
+// ── sub-components ────────────────────────────────────────────────────────────
 
-function getPlayerName(id: string) {
-  return getTeamPlayers(id.split("-p")[0])?.find(p => p.id === id)?.name ?? id;
-}
-
-function statusLabel(s: MatchStatus) {
-  return s === "live" ? "LIVE" : s === "finished" ? "Conclusa" : s === "locked" ? "Bloccata" : "Programmata";
-}
-
-function TeamColumn({ team, side, active, onSelect }: { team: { id: string; name: string; shortName: string }; side: "home" | "away"; active: boolean; onSelect: () => void }) {
+function TeamCol({ team, side, active, onSelect }: {
+  team: { id: string; shortName: string }; side: "home" | "away"; active: boolean; onSelect: () => void;
+}) {
   return (
     <button onClick={onSelect} className={`flex flex-col items-center gap-2 p-2 rounded-lg ${active ? "bg-primary/5" : ""}`}>
       <TeamBadge teamId={team.id} size={52} />
       <div className="text-center">
-        <div className="font-bold text-sm leading-tight">{team.shortName}</div>
-        <div className="text-[10px] uppercase text-muted-foreground tracking-wider">{side}</div>
+        <div className="font-bold text-sm">{team.shortName}</div>
+        <div className="text-[10px] uppercase text-muted-foreground">{side}</div>
       </div>
     </button>
   );
 }
 
-function StatusBadge({ status }: { status: MatchStatus }) {
-  if (status === "live") return <span className="flex items-center gap-1.5 text-live text-xs font-bold uppercase"><span className="w-2 h-2 rounded-full bg-live live-pulse" /> LIVE</span>;
-  if (status === "finished") return <span className="text-xs font-bold text-success uppercase flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Finita</span>;
-  if (status === "locked") return <span className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Bloccata</span>;
+function PhaseBadge({ status, phase }: { status: MatchStatus; phase: Match["currentPhase"] }) {
+  if (status === "live") {
+    const label =
+      phase === "first_half"  ? "1° TEMPO" :
+      phase === "half_time"   ? "INTERVALLO" :
+      phase === "second_half" ? "2° TEMPO" :
+      phase === "shootout"    ? "RIGORI" : "LIVE";
+    return (
+      <span className="flex items-center gap-1.5 text-live text-xs font-bold uppercase">
+        <span className="w-2 h-2 rounded-full bg-live live-pulse" /> {label}
+      </span>
+    );
+  }
+  if (status === "finished") return <span className="text-xs font-bold text-emerald-500 uppercase flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Finita</span>;
+  if (status === "locked")   return <span className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> Bloccata</span>;
   return <span className="text-xs font-bold text-muted-foreground uppercase">In attesa</span>;
 }
 
-function PlayerPicker({
-  teamId, title, subtitle, onCancel, onPick,
-}: { teamId: string; title: string; subtitle?: string; onCancel: () => void; onPick: (id: string) => void }) {
+const PERIOD_LABEL: Record<string, string> = {
+  first_half: "— 1° Tempo —", second_half: "— 2° Tempo —", shootout: "— Rigori —",
+};
+
+function Timeline({ events, home, away }: {
+  events: Match["events"];
+  home: { id: string; shortName: string };
+  away: { id: string; shortName: string };
+}) {
+  let lastPeriod: string | null | undefined = undefined;
+  return (
+    <>
+      {events.map(ev => {
+        const showSep = ev.period !== lastPeriod && ev.period != null;
+        lastPeriod = ev.period;
+        const sideTeam = ev.team === "home" ? home : away;
+        const isCard = ev.type === "yellow_card" || ev.type === "red_card";
+        const isMiss = ev.type === "shootout_miss";
+        return (
+          <div key={ev.id}>
+            {showSep && (
+              <div className="px-3 py-1 bg-secondary/50 text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-center">
+                {PERIOD_LABEL[ev.period!]}
+              </div>
+            )}
+            <div className="flex items-center gap-3 px-3 py-2.5 border-b last:border-0">
+              <span className="w-10 text-center font-bold tabular-nums text-sm text-muted-foreground">{ev.minute}'</span>
+              <TeamBadge teamId={sideTeam.id} size={20} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold truncate">{getPlayer(ev.playerId)?.name ?? "—"}</div>
+                <div className="text-[11px] text-muted-foreground">{ev.label}</div>
+              </div>
+              {ev.weight > 1 && (
+                <span className="text-[10px] font-bold bg-violet-500/15 text-violet-600 px-1.5 py-0.5 rounded">×{ev.weight}</span>
+              )}
+              {isCard ? (
+                <span className={`w-4 h-5 rounded-sm ${ev.type === "yellow_card" ? "bg-yellow-400" : "bg-red-600"}`} />
+              ) : isMiss ? (
+                <span className="text-xs font-black text-rose-500">✗</span>
+              ) : (
+                <Goal className={`w-4 h-4 ${ev.type === "own_goal" ? "text-destructive" : ev.type === "shootout_goal" ? "text-emerald-500" : "text-primary"}`} />
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function PlayerPicker({ teamId, title, subtitle, onCancel, onPick }: {
+  teamId: string; title: string; subtitle?: string; onCancel: () => void; onPick: (id: string) => void;
+}) {
   const roster = getTeamPlayers(teamId).filter(p => p.role !== "pres");
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 backdrop-blur-sm" onClick={onCancel}>
@@ -433,15 +552,12 @@ function PlayerPicker({
         </div>
         <div className="flex-1 overflow-y-auto divide-y">
           {roster.map(p => (
-            <button
-              key={p.id}
-              onClick={() => onPick(p.id)}
+            <button key={p.id} onClick={() => onPick(p.id)}
               className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/40 text-left"
             >
-              <span className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold tabular-nums">{p.number}</span>
+              <span className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold tabular-nums">{p.number || "—"}</span>
               <span className="flex-1 font-semibold text-sm">{p.name}</span>
               <span className="text-[10px] uppercase font-bold text-muted-foreground">{p.role === "p" ? "Portiere" : "Giocatore"}</span>
-              <Plus className="w-4 h-4 text-primary" />
             </button>
           ))}
         </div>
@@ -450,12 +566,17 @@ function PlayerPicker({
   );
 }
 
-function CloseDialog({
-  tied, home, away, homeScore, awayScore, onCancel, onDirect, onShootout,
-}: {
-  tied: boolean; home: string; away: string; homeScore: number; awayScore: number;
+function CloseDialog({ home, away, homeScore, awayScore, homeSO, awaySO, inShootout, onCancel, onDirect, onShootout }: {
+  home: string; away: string; homeScore: number; awayScore: number;
+  homeSO: number; awaySO: number; inShootout: boolean;
   onCancel: () => void; onDirect: () => void; onShootout: (w: "home" | "away") => void;
 }) {
+  const regHome = homeScore - homeSO;
+  const regAway = awayScore - awaySO;
+  const tiedInReg = regHome === regAway;
+  const soWinner: "home" | "away" | null =
+    inShootout ? (homeSO > awaySO ? "home" : awaySO > homeSO ? "away" : null) : null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm p-4" onClick={onCancel}>
       <div className="w-full max-w-sm bg-card border rounded-xl shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -464,23 +585,40 @@ function CloseDialog({
           <button onClick={onCancel} className="p-1.5 rounded hover:bg-secondary"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-4">
-          <div className="text-center text-3xl font-black tabular-nums mb-1">{homeScore} - {awayScore}</div>
+          <div className="text-center text-3xl font-black tabular-nums mb-0.5">{homeScore} – {awayScore}</div>
+          {(homeSO > 0 || awaySO > 0) && (
+            <div className="text-center text-xs text-muted-foreground mb-1">reg. {regHome}–{regAway} · rig. {homeSO}–{awaySO}</div>
+          )}
           <div className="text-center text-xs text-muted-foreground mb-4">{home} vs {away}</div>
 
-          {tied ? (
-            <>
-              <div className="rounded-md bg-accent/10 border border-accent/30 p-3 mb-3 text-xs">
-                Punteggio in parità: scegli il vincitore ai rigori.
-              </div>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <button onClick={() => onShootout("home")} className="bg-primary text-primary-foreground py-2.5 rounded-lg font-semibold text-sm">Vince {home}</button>
-                <button onClick={() => onShootout("away")} className="bg-primary text-primary-foreground py-2.5 rounded-lg font-semibold text-sm">Vince {away}</button>
-              </div>
-            </>
-          ) : (
+          {inShootout ? (
+            soWinner ? (
+              <button onClick={() => onShootout(soWinner)} className="w-full bg-primary text-primary-foreground py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 mb-2">
+                <Trophy className="w-4 h-4" /> Vince {soWinner === "home" ? home : away} (rigori)
+              </button>
+            ) : (
+              <>
+                <div className="rounded-md bg-secondary/50 p-3 mb-3 text-xs">Rigori pari — scegli manualmente.</div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <button onClick={() => onShootout("home")} className="bg-primary text-primary-foreground py-2.5 rounded-lg font-semibold text-sm">Vince {home}</button>
+                  <button onClick={() => onShootout("away")} className="bg-primary text-primary-foreground py-2.5 rounded-lg font-semibold text-sm">Vince {away}</button>
+                </div>
+              </>
+            )
+          ) : !tiedInReg ? (
             <button onClick={onDirect} className="w-full bg-primary text-primary-foreground py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 mb-2">
               <Trophy className="w-4 h-4" /> Vittoria diretta
             </button>
+          ) : (
+            <>
+              <div className="rounded-md bg-accent/10 border border-accent/30 p-3 mb-3 text-xs">
+                Pari al 40' — usa "Avvia rigori" per lo shootout, oppure scegli il vincitore.
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <button onClick={() => onShootout("home")} className="bg-secondary py-2.5 rounded-lg font-semibold text-sm">Vince {home}</button>
+                <button onClick={() => onShootout("away")} className="bg-secondary py-2.5 rounded-lg font-semibold text-sm">Vince {away}</button>
+              </div>
+            </>
           )}
           <button onClick={onCancel} className="w-full border py-2 rounded-lg text-sm font-semibold">Annulla</button>
         </div>
@@ -489,9 +627,7 @@ function CloseDialog({
   );
 }
 
-function ConfirmLockDialog({
-  home, away, homeScore, awayScore, onCancel, onConfirm,
-}: {
+function LockDialog({ home, away, homeScore, awayScore, onCancel, onConfirm }: {
   home: string; away: string; homeScore: number; awayScore: number;
   onCancel: () => void; onConfirm: () => void;
 }) {
@@ -503,15 +639,15 @@ function ConfirmLockDialog({
           <button onClick={onCancel} className="p-1.5 rounded hover:bg-secondary"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-4">
-          <div className="text-center text-3xl font-black tabular-nums mb-1">{homeScore} - {awayScore}</div>
+          <div className="text-center text-3xl font-black tabular-nums mb-1">{homeScore} – {awayScore}</div>
           <div className="text-center text-xs text-muted-foreground mb-4">{home} vs {away}</div>
           <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3 mb-3 text-xs">
-            Dopo il blocco non sarà più possibile modificare eventi o punteggio finché non sbloccata.
+            Dopo il blocco non sarà possibile modificare eventi o punteggio.
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={onCancel} className="border py-2 rounded-lg text-sm font-semibold">Annulla</button>
             <button onClick={onConfirm} className="bg-foreground text-background py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1.5">
-              <Lock className="w-4 h-4" /> Conferma blocco
+              <Lock className="w-4 h-4" /> Conferma
             </button>
           </div>
         </div>

@@ -38,6 +38,33 @@ export type Database = {
         }
         Relationships: []
       }
+      calendar_events: {
+        Row: {
+          created_at: string
+          description: string | null
+          event_date: string
+          id: string
+          start_time: string | null
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          event_date: string
+          id?: string
+          start_time?: string | null
+          title: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          event_date?: string
+          id?: string
+          start_time?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       match_events: {
         Row: {
           created_at: string
@@ -46,6 +73,7 @@ export type Database = {
           id: string
           match_id: string
           minute: number | null
+          period: string | null
           player_id: string
           team_id: string
         }
@@ -56,6 +84,7 @@ export type Database = {
           id?: string
           match_id: string
           minute?: number | null
+          period?: string | null
           player_id: string
           team_id: string
         }
@@ -66,6 +95,7 @@ export type Database = {
           id?: string
           match_id?: string
           minute?: number | null
+          period?: string | null
           player_id?: string
           team_id?: string
         }
@@ -158,6 +188,9 @@ export type Database = {
           away_score: number
           away_team_id: string | null
           created_at: string
+          current_phase: string | null
+          first_half_ended_at: string | null
+          first_half_started_at: string | null
           home_placeholder: string | null
           home_score: number
           home_team_id: string | null
@@ -166,6 +199,8 @@ export type Database = {
           notes: string | null
           result_type: string | null
           scheduled_at: string
+          second_half_ended_at: string | null
+          second_half_started_at: string | null
           stage_id: string
           status: string
           venue: string | null
@@ -176,6 +211,9 @@ export type Database = {
           away_score?: number
           away_team_id?: string | null
           created_at?: string
+          current_phase?: string | null
+          first_half_ended_at?: string | null
+          first_half_started_at?: string | null
           home_placeholder?: string | null
           home_score?: number
           home_team_id?: string | null
@@ -184,6 +222,8 @@ export type Database = {
           notes?: string | null
           result_type?: string | null
           scheduled_at: string
+          second_half_ended_at?: string | null
+          second_half_started_at?: string | null
           stage_id: string
           status?: string
           venue?: string | null
@@ -194,6 +234,9 @@ export type Database = {
           away_score?: number
           away_team_id?: string | null
           created_at?: string
+          current_phase?: string | null
+          first_half_ended_at?: string | null
+          first_half_started_at?: string | null
           home_placeholder?: string | null
           home_score?: number
           home_team_id?: string | null
@@ -202,6 +245,8 @@ export type Database = {
           notes?: string | null
           result_type?: string | null
           scheduled_at?: string
+          second_half_ended_at?: string | null
+          second_half_started_at?: string | null
           stage_id?: string
           status?: string
           venue?: string | null
@@ -366,18 +411,24 @@ export type Database = {
           id: string
           name: string
           slug: string | null
+          short_name: string | null
+          color: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
           slug?: string | null
+          short_name?: string | null
+          color?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
           slug?: string | null
+          short_name?: string | null
+          color?: string | null
         }
         Relationships: []
       }
@@ -391,9 +442,11 @@ export type Database = {
           goals: number | null
           own_goals: number | null
           player_id: string | null
+          red_cards: number | null
           role: string | null
           team_id: string | null
           team_name: string | null
+          yellow_cards: number | null
         }
         Relationships: [
           {

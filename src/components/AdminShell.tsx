@@ -1,11 +1,13 @@
 import { Link, useRouterState, Navigate } from "@tanstack/react-router";
-import { LayoutDashboard, Upload, CalendarCog, Gamepad2, ArrowLeft, Moon, Sun, LogOut } from "lucide-react";
+import { LayoutDashboard, Upload, CalendarCog, Gamepad2, Shield, Users, ArrowLeft, Moon, Sun, LogOut } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
 const items = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/admin/squadre", label: "Squadre", icon: Shield },
+  { to: "/admin/giocatori", label: "Giocatori", icon: Users },
   { to: "/admin/import", label: "Import CSV", icon: Upload },
   { to: "/admin/calendario", label: "Calendario", icon: CalendarCog },
   { to: "/admin/partita", label: "Gestione partita", icon: Gamepad2 },

@@ -134,9 +134,13 @@ function validate(type: ImportType, raw: string): ParsedResult {
     }
   }
 
-  const teamIds = new Set(teams.map(t => t.id));
+  // Accept both DB UUIDs and slugs (e.g. "FCP") as valid team references
+  const teamIds = new Set([
+    ...teams.map(t => t.id),
+    ...teams.flatMap(t => t.slug ? [t.slug] : []),
+  ]);
   const existingByType: Set<string> =
-    type === "squadre" ? new Set(teams.map(t => t.id))
+    type === "squadre" ? new Set(teams.flatMap(t => t.slug ? [t.slug] : []))
     : type === "giocatori" ? new Set(players.map(p => p.id))
     : new Set(matches.map(m => m.id));
 
@@ -249,13 +253,19 @@ function ImportPage() {
       const fresh = skipDuplicates ? rows.filter(r => r.duplicate !== "existing") : rows;
 
       if (type === "squadre") {
-        await upsertTeams(fresh.map(r => ({ name: r.data.nome, slug: r.data.id || null })));
+        await upsertTeams(fresh.map(r => ({
+          name: r.data.nome,
+          slug: r.data.id || null,
+          short_name: r.data.short_name || null,
+          color: r.data.color || null,
+        })));
       } else if (type === "giocatori") {
-        const teamByCsvId: Record<string, string> = {};
-        teams.forEach(t => { teamByCsvId[t.id] = t.id; });
+        // Resolve slug (e.g. "FCP") to the actual Supabase UUID
+        const slugToId: Record<string, string> = {};
+        teams.forEach(t => { if (t.slug) slugToId[t.slug] = t.id; });
         await upsertPlayers(fresh.map(r => ({
           full_name: r.data.nome,
-          team_id: r.data.team_id,
+          team_id: slugToId[r.data.team_id] ?? r.data.team_id,
           role: r.data.ruolo as PlayerRole,
           jersey_number: r.data.numero ? parseInt(r.data.numero) : null,
         })));

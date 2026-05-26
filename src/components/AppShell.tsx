@@ -18,11 +18,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <Link to="/" className="flex items-center gap-2 font-bold">
-            <div className="w-8 h-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center text-sm">CL</div>
-            <span className="hidden sm:inline tracking-tight">CAVE LEAGUE</span>
+          <Link to="/" className="flex items-center gap-2 font-black tracking-tight">
+            <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-xs font-black">CL</div>
+            <span className="hidden sm:inline text-sm uppercase tracking-widest">Cave League</span>
           </Link>
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map(n => (
@@ -30,7 +30,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={n.to}
                 to={n.to}
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  isActive(n.to) ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                  isActive(n.to) ? "bg-primary/12 text-primary font-semibold" : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
                 }`}
               >
                 {n.label}
@@ -68,7 +68,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={n.to}
                 to={n.to}
                 className={`flex flex-col items-center justify-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
-                  active ? "text-primary" : "text-muted-foreground"
+                  active ? "text-primary font-semibold" : "text-muted-foreground"
                 }`}
               >
                 <Icon className={`w-5 h-5 ${active ? "stroke-[2.5]" : ""}`} />

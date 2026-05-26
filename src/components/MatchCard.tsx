@@ -1,4 +1,4 @@
-// no-op import removed
+import { Link } from "@tanstack/react-router";
 import { Match, getTeam, phaseShort, phaseLabel } from "@/lib/mockData";
 import { TeamBadge } from "./TeamBadge";
 import { Lock } from "lucide-react";
@@ -17,7 +17,7 @@ export function MatchCard({ match, compact = false }: { match: Match; compact?: 
     match.phase === "third" ? "bg-secondary text-secondary-foreground" :
     "bg-secondary text-muted-foreground";
 
-  return (
+  const card = (
     <div className="rounded-xl border bg-card p-3 sm:p-4 hover:border-primary/50 transition-colors">
       <div className="flex items-center justify-between mb-2 text-xs text-muted-foreground gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
@@ -68,5 +68,14 @@ export function MatchCard({ match, compact = false }: { match: Match; compact?: 
       )}
     </div>
   );
+
+  if (match.homeTeamId && match.awayTeamId) {
+    return (
+      <Link to="/partite/$matchId" params={{ matchId: match.id }} className="block">
+        {card}
+      </Link>
+    );
+  }
+  return card;
 }
 
