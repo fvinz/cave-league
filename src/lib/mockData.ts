@@ -71,6 +71,7 @@ export interface CalendarEvent {
   description?: string;
   date: string;       // "YYYY-MM-DD"
   startTime?: string; // "HH:MM"
+  imageUrl?: string;  // external URL, optional
 }
 
 export interface Standing {
@@ -129,6 +130,17 @@ function colorToAccent(hex: string): string {
   const g = parseInt(hex.slice(3, 5), 16);
   const b = parseInt(hex.slice(5, 7), 16);
   return `#${Math.round(r * 0.1 + 255 * 0.9).toString(16).padStart(2, "0")}${Math.round(g * 0.1 + 255 * 0.9).toString(16).padStart(2, "0")}${Math.round(b * 0.1 + 255 * 0.9).toString(16).padStart(2, "0")}`;
+}
+
+// Returns legible text color (dark or white) for any team background color.
+// Uses NTSC perceived-luminance formula; threshold 160 gives safe contrast
+// even on mid-range colors like yellow or amber.
+export function teamTextColor(hex: string): string {
+  if (!hex || hex.length < 7) return "#ffffff";
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 160 ? "#111111" : "#ffffff";
 }
 
 const STAGE_TO_PHASE: Record<string, MatchPhase> = {
@@ -253,6 +265,7 @@ export async function loadAll(): Promise<void> {
       description: e.description ?? undefined,
       date: e.event_date,
       startTime: e.start_time ?? undefined,
+      imageUrl: e.image_url ?? undefined,
     }));
 
     loaded = true;
@@ -739,19 +752,20 @@ export async function deletePlayer(id: string): Promise<{ ok: true } | { ok: fal
 
 // ============= CALENDAR EVENTS CRUD =============
 export async function createCalendarEvent(data: {
-  title: string; description?: string; event_date: string; start_time?: string;
+  title: string; description?: string; event_date: string; start_time?: string; image_url?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { error } = await supabase.from("calendar_events").insert({
     title: data.title,
     description: data.description ?? null,
     event_date: data.event_date,
     start_time: data.start_time ?? null,
+    image_url: data.image_url ?? null,
   });
   if (error) return { ok: false, error: error.message };
   await reloadAll(); return { ok: true };
 }
 export async function updateCalendarEvent(id: string, patch: {
-  title?: string; description?: string | null; event_date?: string; start_time?: string | null;
+  title?: string; description?: string | null; event_date?: string; start_time?: string | null; image_url?: string | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { error } = await supabase.from("calendar_events").update(patch).eq("id", id);
   if (error) return { ok: false, error: error.message };

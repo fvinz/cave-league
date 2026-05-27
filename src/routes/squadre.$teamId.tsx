@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { MatchCard } from "@/components/MatchCard";
 import { TeamBadge } from "@/components/TeamBadge";
 import { SectionHeader } from "@/components/SectionHeader";
-import { computeStandings, getPlayer, getPlayerStats, getTeam, getTeamAggregate, getTeamMatches, getTeamPlayers, PlayerRole, useStoreVersion } from "@/lib/mockData";
+import { computeStandings, getPlayer, getPlayerStats, getTeam, getTeamAggregate, getTeamMatches, getTeamPlayers, PlayerRole, teamTextColor, useStoreVersion } from "@/lib/mockData";
 
 export const Route = createFileRoute("/squadre/$teamId")({
   component: TeamDetail,
@@ -39,7 +39,7 @@ function TeamDetail() {
     <AppShell>
       <Link to="/squadre" className="text-sm text-muted-foreground hover:text-foreground mb-3 inline-block">← Squadre</Link>
 
-      <div className="rounded-2xl p-5 mb-4 flex items-center gap-4 text-white" style={{ background: `linear-gradient(135deg, ${team.color}, ${team.color}cc)` }}>
+      <div className="rounded-2xl p-5 mb-4 flex items-center gap-4" style={{ background: `linear-gradient(135deg, ${team.color}, ${team.color}cc)`, color: teamTextColor(team.color) }}>
         <TeamBadge teamId={team.id} size={64} />
         <div className="flex-1 min-w-0">
           <div className="text-xs uppercase tracking-widest opacity-80 font-bold">{team.shortName}</div>

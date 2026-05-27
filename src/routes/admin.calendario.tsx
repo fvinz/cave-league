@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AdminShell } from "@/components/AdminShell";
+import { supabase } from "@/integrations/supabase/client";
 import { TeamBadge } from "@/components/TeamBadge";
 import {
   matches as allMatches,
@@ -22,7 +23,7 @@ import {
   type CalendarEvent,
 } from "@/lib/mockData";
 import {
-  Plus, Pencil, Trash2, X, Save, Calendar as CalIcon, AlertTriangle, Star,
+  Plus, Pencil, Trash2, X, Save, Calendar as CalIcon, AlertTriangle, Star, Upload,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/calendario")({
@@ -49,13 +50,13 @@ function toLocalInput(iso: string): string {
 
 // ── event draft ───────────────────────────────────────────────────────────────
 interface EventDraft {
-  id: string; title: string; description: string; event_date: string; start_time: string;
+  id: string; title: string; description: string; event_date: string; start_time: string; image_url: string;
 }
 function emptyEventDraft(): EventDraft {
-  return { id: "", title: "", description: "", event_date: "", start_time: "" };
+  return { id: "", title: "", description: "", event_date: "", start_time: "", image_url: "" };
 }
 function calEventToDraft(e: CalendarEvent): EventDraft {
-  return { id: e.id, title: e.title, description: e.description ?? "", event_date: e.date, start_time: e.startTime ?? "" };
+  return { id: e.id, title: e.title, description: e.description ?? "", event_date: e.date, start_time: e.startTime ?? "", image_url: e.imageUrl ?? "" };
 }
 
 // ── component ─────────────────────────────────────────────────────────────────
@@ -130,17 +131,35 @@ function AdminCalendario() {
   const openCreateEvent = () => setEventEditor({ mode: "create", draft: emptyEventDraft() });
   const openEditEvent = (e: CalendarEvent) => setEventEditor({ mode: "edit", draft: calEventToDraft(e) });
 
-  const saveEvent = async () => {
+  const saveEvent = async (imageFile?: File) => {
     if (!eventEditor) return;
     const d = eventEditor.draft;
     if (!d.title.trim()) return toast.error("Il titolo è obbligatorio");
     if (!d.event_date) return toast.error("La data è obbligatoria");
     setSaving(true);
+
+    let resolvedImageUrl: string | undefined = d.image_url.trim() || undefined;
+
+    if (imageFile) {
+      const ext = imageFile.name.split(".").pop() ?? "jpg";
+      const path = `events/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("event-images")
+        .upload(path, imageFile, { upsert: false });
+      if (upErr) {
+        setSaving(false);
+        return toast.error(`Upload fallito: ${upErr.message}`);
+      }
+      const { data: urlData } = supabase.storage.from("event-images").getPublicUrl(path);
+      resolvedImageUrl = urlData.publicUrl;
+    }
+
     const payload = {
       title: d.title.trim(),
       description: d.description.trim() || undefined,
       event_date: d.event_date,
       start_time: d.start_time || undefined,
+      image_url: resolvedImageUrl,
     };
     const res = eventEditor.mode === "create"
       ? await createCalendarEvent(payload)
@@ -238,7 +257,7 @@ function AdminCalendario() {
         <MatchEditorDrawer editor={matchEditor} setEditor={setMatchEditor} onSave={saveMatch} saving={saving} />
       )}
       {eventEditor && (
-        <EventEditorDrawer editor={eventEditor} setEditor={setEventEditor} onSave={saveEvent} saving={saving} />
+        <EventEditorDrawer editor={eventEditor} setEditor={setEventEditor} onSave={(f) => saveEvent(f)} saving={saving} />
       )}
 
       {/* Delete dialogs */}
@@ -320,9 +339,15 @@ function MatchRow({ m, onEdit, onDelete }: { m: Match; onEdit: (m: Match) => voi
 function EventRow({ event, onEdit, onDelete }: { event: CalendarEvent; onEdit: (e: CalendarEvent) => void; onDelete: (e: CalendarEvent) => void }) {
   return (
     <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 hover:bg-secondary/30">
-      <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
-        <Star className="w-3.5 h-3.5 text-accent-foreground" />
-      </div>
+      {event.imageUrl ? (
+        <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 bg-secondary">
+          <img src={event.imageUrl} alt="" className="w-full h-full object-cover" />
+        </div>
+      ) : (
+        <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+          <Star className="w-3.5 h-3.5 text-accent-foreground" />
+        </div>
+      )}
       <div className="min-w-0">
         <div className="text-sm font-semibold truncate">{event.title}</div>
         <div className="text-[11px] text-muted-foreground mt-0.5">
@@ -425,11 +450,29 @@ function EventEditorDrawer({
 }: {
   editor: { mode: "create" | "edit"; draft: EventDraft };
   setEditor: (e: { mode: "create" | "edit"; draft: EventDraft } | null) => void;
-  onSave: () => void;
+  onSave: (imageFile?: File) => void;
   saving: boolean;
 }) {
   const d = editor.draft;
   const update = (patch: Partial<EventDraft>) => setEditor({ ...editor, draft: { ...d, ...patch } });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!imageFile) { setPreviewUrl(null); return; }
+    const url = URL.createObjectURL(imageFile);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [imageFile]);
+
+  const clearFile = () => {
+    setImageFile(null);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const effectivePreview = previewUrl ?? (d.image_url.trim() || null);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 backdrop-blur-sm" onClick={() => setEditor(null)}>
       <div className="w-full sm:max-w-md bg-card border-t sm:border sm:rounded-xl shadow-xl max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -452,10 +495,66 @@ function EventEditorDrawer({
           <Field label="Descrizione">
             <textarea value={d.description} onChange={e => update({ description: e.target.value })} rows={3} placeholder="Descrizione opzionale…" className="input resize-none" />
           </Field>
+
+          {/* Image section — file upload takes priority over URL */}
+          <div className="space-y-3">
+            <span className="block text-[11px] uppercase tracking-wider font-bold text-muted-foreground">Immagine</span>
+
+            {/* File upload */}
+            <div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0] ?? null;
+                  setImageFile(f);
+                  if (f) update({ image_url: "" });
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="w-full flex items-center justify-center gap-2 border border-dashed rounded-lg py-2.5 text-sm font-semibold text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                {imageFile ? imageFile.name : "Carica file…"}
+              </button>
+              {imageFile && (
+                <button type="button" onClick={clearFile} className="mt-1 text-[11px] text-destructive hover:underline">
+                  Rimuovi file
+                </button>
+              )}
+            </div>
+
+            {/* URL fallback — disabled when a file is selected */}
+            <div className={imageFile ? "opacity-40 pointer-events-none" : ""}>
+              <input
+                type="url"
+                value={d.image_url}
+                onChange={e => update({ image_url: e.target.value })}
+                placeholder="Oppure incolla un URL…"
+                className="input"
+              />
+            </div>
+
+            {/* Preview */}
+            {effectivePreview && (
+              <div className="rounded-lg overflow-hidden border aspect-video bg-secondary">
+                <img
+                  src={effectivePreview}
+                  alt="Anteprima"
+                  className="w-full h-full object-cover"
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                />
+              </div>
+            )}
+          </div>
         </div>
         <div className="sticky bottom-0 bg-card border-t p-3 flex gap-2">
           <button onClick={() => setEditor(null)} className="flex-1 py-2.5 rounded-lg border font-semibold text-sm">Annulla</button>
-          <button onClick={onSave} disabled={saving} className="flex-1 bg-primary text-primary-foreground py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 disabled:opacity-60">
+          <button onClick={() => onSave(imageFile ?? undefined)} disabled={saving} className="flex-1 bg-primary text-primary-foreground py-2.5 rounded-lg font-semibold text-sm flex items-center justify-center gap-1.5 disabled:opacity-60">
             <Save className="w-4 h-4" /> {saving ? "Salvataggio…" : "Salva"}
           </button>
         </div>

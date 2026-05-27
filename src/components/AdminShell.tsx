@@ -3,6 +3,9 @@ import { LayoutDashboard, Upload, CalendarCog, Gamepad2, Shield, Users, ArrowLef
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
+import { BrandFooter } from "@/components/BrandFooter";
+import clBlack from "@/assets/logos/cl-black.png";
+import clWhite from "@/assets/logos/cl-white.png";
 
 const items = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -67,6 +70,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+        <div className="px-4 pb-3 pt-4 border-t flex items-center justify-center">
+          <img src={clBlack} alt="Cave League" width={1000} height={1000} className="h-12 w-12 object-contain opacity-60 block dark:hidden" />
+          <img src={clWhite} alt="Cave League" width={1000} height={1000} className="h-12 w-12 object-contain opacity-60 hidden dark:block" />
+        </div>
         <div className="p-3 border-t space-y-1">
           <div className="px-3 py-1 text-[11px] text-muted-foreground truncate" title={session.user.email ?? ""}>
             {session.user.email}
@@ -111,7 +118,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="flex-1 p-4 md:p-8 max-w-5xl">{children}</main>
+      <main className="flex-1 p-4 md:p-8 max-w-5xl">
+        {children}
+        <BrandFooter compact />
+      </main>
     </div>
   );
 }

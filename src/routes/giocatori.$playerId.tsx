@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { TeamBadge } from "@/components/TeamBadge";
 import {
   getPlayer, getPlayerStats, getTeam, getTeamMatches,
-  PlayerRole, useStoreVersion,
+  PlayerRole, teamTextColor, useStoreVersion,
 } from "@/lib/mockData";
 
 export const Route = createFileRoute("/giocatori/$playerId")({
@@ -42,8 +42,8 @@ function PlayerDetail() {
 
       <div className="rounded-2xl border bg-card p-5 mb-6">
         <div className="flex items-start gap-4">
-          <div className="w-20 h-20 rounded-xl flex items-center justify-center text-3xl font-black text-white shrink-0"
-            style={{ backgroundColor: team.color }}>
+          <div className="w-20 h-20 rounded-xl flex items-center justify-center text-3xl font-black shrink-0"
+            style={{ backgroundColor: team.color, color: teamTextColor(team.color) }}>
             {player.number || "—"}
           </div>
           <div className="flex-1 min-w-0">

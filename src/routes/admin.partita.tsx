@@ -539,7 +539,14 @@ function Timeline({ events, home, away }: {
 function PlayerPicker({ teamId, title, subtitle, onCancel, onPick }: {
   teamId: string; title: string; subtitle?: string; onCancel: () => void; onPick: (id: string) => void;
 }) {
-  const roster = getTeamPlayers(teamId).filter(p => p.role !== "pres");
+  const roster = getTeamPlayers(teamId)
+    .filter(p => p.role !== "pres")
+    .sort((a, b) => {
+      // Players without a number (number === 0) go at the end
+      const na = a.number > 0 ? a.number : Infinity;
+      const nb = b.number > 0 ? b.number : Infinity;
+      return na - nb;
+    });
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 backdrop-blur-sm" onClick={onCancel}>
       <div className="w-full sm:max-w-md bg-card border-t sm:border sm:rounded-xl shadow-xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>

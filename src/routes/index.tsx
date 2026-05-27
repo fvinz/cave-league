@@ -10,6 +10,10 @@ import {
   type CalendarEvent,
 } from "@/lib/mockData";
 import { Calendar, Trophy, Zap, Star } from "lucide-react";
+import clBlack from "@/assets/logos/cl-black.png";
+import clWhite from "@/assets/logos/cl-white.png";
+import cavelabBlack from "@/assets/logos/cavelab-black.png";
+import cavelabWhite from "@/assets/logos/cavelab-white.png";
 
 // ── Countdown target: Friday 5 June 2026, 19:00 CEST (Italy = UTC+2 in summer)
 const COUNTDOWN_TARGET = new Date("2026-06-05T19:00:00+02:00");
@@ -146,6 +150,20 @@ function TodayEventCard({ event }: { event: CalendarEvent }) {
   );
 }
 
+// ── brand logo pair for the hero banner ──────────────────────────────────────
+function HeroBrandLogos({ clSize, labSize, gap = "gap-4" }: {
+  clSize: string; labSize: string; gap?: string;
+}) {
+  return (
+    <div className={`flex items-center ${gap} shrink-0`}>
+      <img src={clBlack}      alt="Cave League" width={1000} height={1000} className={`${clSize} object-contain block dark:hidden`} />
+      <img src={clWhite}      alt="Cave League" width={1000} height={1000} className={`${clSize} object-contain hidden dark:block`} />
+      <img src={cavelabBlack} alt="Cave Lab"    width={1000} height={1000} className={`${labSize} object-contain block dark:hidden`} />
+      <img src={cavelabWhite} alt="Cave Lab"    width={1000} height={1000} className={`${labSize} object-contain hidden dark:block`} />
+    </div>
+  );
+}
+
 // ── page ──────────────────────────────────────────────────────────────────────
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -181,21 +199,34 @@ function HomePage() {
 
       {/* Hero */}
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-pitch text-primary-foreground p-5 sm:p-8 mb-6">
-        <div className="relative z-10">
-          <div className="text-xs uppercase tracking-widest opacity-70 font-bold">5 — 14 Giugno 2026 · Cave</div>
-          <h1 className="text-4xl sm:text-6xl font-black mt-2 leading-none">CAVE LEAGUE</h1>
-          <p className="mt-3 max-w-md opacity-80 text-sm sm:text-base">Il torneo che incendia l'estate. Stile Kings League, cuore di Cave.</p>
-          <div className="flex flex-wrap gap-2 mt-5">
-            <Link to="/calendario" className="bg-white/15 backdrop-blur border border-white/25 px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-1.5 hover:bg-white/25 transition-colors">
-              <Calendar className="w-4 h-4" /> Calendario
-            </Link>
-            <Link to="/classifica" className="bg-white/10 backdrop-blur px-4 py-2 rounded-lg text-sm font-semibold border border-white/15 inline-flex items-center gap-1.5 hover:bg-white/20 transition-colors">
-              <Trophy className="w-4 h-4" /> Classifica
-            </Link>
+        {/* Two-column layout: text left, logos right */}
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-10">
+
+          {/* Left / top: text + CTAs */}
+          <div className="flex-1 min-w-0">
+            <div className="text-xs uppercase tracking-widest opacity-70 font-bold">5 — 14 Giugno 2026 · Cave</div>
+            <h1 className="text-4xl sm:text-6xl font-black mt-2 leading-none">CAVE LEAGUE</h1>
+            <p className="mt-3 max-w-md opacity-80 text-sm sm:text-base">Il torneo che incendia l'estate. Stile Kings League, cuore di Cave.</p>
+            <div className="flex flex-wrap gap-2 mt-5">
+              <Link to="/calendario" className="bg-white/15 backdrop-blur border border-white/25 px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-1.5 hover:bg-white/25 transition-colors">
+                <Calendar className="w-4 h-4" /> Calendario
+              </Link>
+              <Link to="/classifica" className="bg-white/10 backdrop-blur px-4 py-2 rounded-lg text-sm font-semibold border border-white/15 inline-flex items-center gap-1.5 hover:bg-white/20 transition-colors">
+                <Trophy className="w-4 h-4" /> Classifica
+              </Link>
+            </div>
           </div>
+
+          {/* Right / bottom: logo pair — horizontal, prominent */}
+          <HeroBrandLogos
+            clSize="h-24 w-24 sm:h-44 sm:w-44"
+            labSize="h-20 w-20 sm:h-36 sm:w-36"
+            gap="gap-3 sm:gap-6"
+          />
         </div>
+
         <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-        <div className="absolute right-24 top-4 w-32 h-32 rounded-full bg-white/5 blur-2xl pointer-events-none" />
+        <div className="absolute -left-8 -top-8 w-48 h-48 rounded-full bg-white/5 blur-3xl pointer-events-none" />
       </section>
 
       {/* Featured */}

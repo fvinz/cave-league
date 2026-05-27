@@ -6,7 +6,7 @@ import {
   matches, calendarEvents, useStoreVersion,
   type CalendarEvent,
 } from "@/lib/mockData";
-import { Calendar, Star } from "lucide-react";
+import { Calendar, Star, X } from "lucide-react";
 
 export const Route = createFileRoute("/calendario")({
   component: CalendarioPage,
@@ -23,6 +23,7 @@ type DayItem =
 function CalendarioPage() {
   useStoreVersion();
   const [filter, setFilter] = useState<FilterKind>("all");
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const todayRef = useRef<HTMLElement | null>(null);
   const scrolled  = useRef(false);
 
@@ -36,14 +37,32 @@ function CalendarioPage() {
     return [...set].sort((a, b) => +new Date(a) - +new Date(b));
   }, [filter, matches.length, calendarEvents.length]);
 
-  // Group items by day
+  // Minutes-from-midnight for chronological sort within a day.
+  // Matches use the time embedded in their ISO date string.
+  // Events use startTime "HH:MM" if present, otherwise go last (1440).
+  const matchMinutes = useMemo(() => {
+    const map = new Map<string, number>();
+    matches.forEach(m => {
+      const d = new Date(m.date);
+      map.set(m.id, d.getHours() * 60 + d.getMinutes());
+    });
+    return map;
+  }, [matches.length]);
+
+  function itemMinutes(item: DayItem): number {
+    if (item.kind === "match") return matchMinutes.get(item.id) ?? 0;
+    if (!item.event.startTime) return 24 * 60;
+    const [h, m] = item.event.startTime.split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  // Group items by day, sorted chronologically within each day
   const grouped = useMemo<{ day: string; items: DayItem[] }[]>(() => {
     return days.map(d => {
       const items: DayItem[] = [];
       if (filter !== "events") {
         matches
           .filter(m => new Date(m.date).toDateString() === d)
-          .sort((a, b) => +new Date(a.date) - +new Date(b.date))
           .forEach(m => items.push({ kind: "match", id: m.id }));
       }
       if (filter !== "matches") {
@@ -51,9 +70,10 @@ function CalendarioPage() {
           .filter(e => new Date(e.date + "T00:00:00").toDateString() === d)
           .forEach(e => items.push({ kind: "event", event: e }));
       }
+      items.sort((a, b) => itemMinutes(a) - itemMinutes(b));
       return { day: d, items };
     }).filter(g => g.items.length > 0);
-  }, [days, filter]);
+  }, [days, filter, matchMinutes]);
 
   // Scroll to today on first render
   useEffect(() => {
@@ -98,22 +118,35 @@ function CalendarioPage() {
               {g.items.map((item, idx) =>
                 item.kind === "match"
                   ? <MatchCard key={item.id} match={matches.find(m => m.id === item.id)!} />
-                  : <EventCard key={item.event.id + idx} event={item.event} />
+                  : <EventCard key={item.event.id + idx} event={item.event} onClick={() => setSelectedEvent(item.event)} />
               )}
             </div>
           </section>
         );
       })}
+
+      {selectedEvent && (
+        <EventDetailModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+      )}
     </AppShell>
   );
 }
 
-function EventCard({ event }: { event: CalendarEvent }) {
+function EventCard({ event, onClick }: { event: CalendarEvent; onClick: () => void }) {
   return (
-    <div className="rounded-xl border bg-card p-3 sm:p-4 flex items-start gap-3 hover:border-primary/40 transition-colors">
-      <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 mt-0.5">
-        <Star className="w-4 h-4 text-accent-foreground" />
-      </div>
+    <button
+      onClick={onClick}
+      className="w-full text-left rounded-xl border bg-card p-3 sm:p-4 flex items-start gap-3 hover:border-primary/40 transition-colors cursor-pointer"
+    >
+      {event.imageUrl ? (
+        <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 mt-0.5 bg-secondary">
+          <img src={event.imageUrl} alt="" className="w-full h-full object-cover" />
+        </div>
+      ) : (
+        <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 mt-0.5">
+          <Star className="w-4 h-4 text-accent-foreground" />
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="font-semibold text-sm">{event.title}</div>
@@ -124,8 +157,55 @@ function EventCard({ event }: { event: CalendarEvent }) {
           )}
         </div>
         {event.description && (
-          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{event.description}</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">{event.description}</p>
         )}
+      </div>
+    </button>
+  );
+}
+
+function EventDetailModal({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
+  const dateLabel = new Date(event.date + "T00:00:00").toLocaleDateString("it-IT", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  });
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-md bg-card border-t sm:border sm:rounded-xl shadow-xl max-h-[85vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        {event.imageUrl && (
+          <div className="aspect-video overflow-hidden sm:rounded-t-xl bg-secondary">
+            <img
+              src={event.imageUrl}
+              alt={event.title}
+              className="w-full h-full object-cover"
+              onError={e => { (e.currentTarget.parentElement as HTMLElement).style.display = "none"; }}
+            />
+          </div>
+        )}
+        <div className="p-5">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <h2 className="text-xl font-black leading-tight">{event.title}</h2>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded hover:bg-secondary text-muted-foreground shrink-0"
+              aria-label="Chiudi"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span className="capitalize">{dateLabel}{event.startTime && <span> · ore {event.startTime}</span>}</span>
+          </div>
+          {event.description && (
+            <p className="text-sm leading-relaxed">{event.description}</p>
+          )}
+        </div>
       </div>
     </div>
   );

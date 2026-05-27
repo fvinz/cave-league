@@ -1,6 +1,11 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Home, Calendar, Trophy, BarChart3, Users, Moon, Sun, Shield } from "lucide-react";
 import { useTheme } from "@/lib/theme";
+import { BrandFooter } from "@/components/BrandFooter";
+import clBlack from "@/assets/logos/cl-black.png";
+import clWhite from "@/assets/logos/cl-white.png";
+import cavelabBlack from "@/assets/logos/cavelab-black.png";
+import cavelabWhite from "@/assets/logos/cavelab-white.png";
 
 const navItems = [
   { to: "/", label: "Home", icon: Home },
@@ -19,11 +24,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-40 border-b bg-background/90 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <Link to="/" className="flex items-center gap-2 font-black tracking-tight">
-            <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center text-xs font-black">CL</div>
-            <span className="hidden sm:inline text-sm uppercase tracking-widest">Cave League</span>
+        <div className="max-w-6xl mx-auto px-4 h-16 grid grid-cols-[1fr_auto_1fr] items-center">
+          {/* Left: brand logos — Cave League badge + Cave Lab */}
+          <Link to="/" className="flex items-center gap-2 justify-self-start">
+            <img src={clBlack} alt="Cave League" width={1000} height={1000} className="h-12 w-12 object-contain block dark:hidden" />
+            <img src={clWhite} alt="Cave League" width={1000} height={1000} className="h-12 w-12 object-contain hidden dark:block" />
+            <img src={cavelabBlack} alt="Cave Lab" width={1000} height={1000} className="h-11 w-11 object-contain block dark:hidden" />
+            <img src={cavelabWhite} alt="Cave Lab" width={1000} height={1000} className="h-11 w-11 object-contain hidden dark:block" />
           </Link>
+
+          {/* Center: nav — truly centered relative to full header width */}
           <nav className="hidden md:flex items-center gap-1">
             {navItems.map(n => (
               <Link
@@ -37,7 +47,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-1">
+
+          {/* Right: controls */}
+          <div className="flex items-center gap-1 justify-self-end">
             <button
               onClick={toggle}
               className="p-2 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
@@ -55,6 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 pb-24 md:pb-8 pt-4">
         {children}
+        <BrandFooter />
       </main>
 
       {/* Mobile bottom nav */}
