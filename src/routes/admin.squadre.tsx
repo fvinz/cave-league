@@ -25,10 +25,11 @@ interface Draft {
   slug: string;
   short_name: string;
   color: string;
+  is_in_championship: boolean;
 }
 
 function emptyDraft(): Draft {
-  return { id: "", name: "", slug: "", short_name: "", color: "#0f172a" };
+  return { id: "", name: "", slug: "", short_name: "", color: "#0f172a", is_in_championship: true };
 }
 
 function teamToDraft(t: Team): Draft {
@@ -38,6 +39,7 @@ function teamToDraft(t: Team): Draft {
     slug: t.slug ?? "",
     short_name: t.shortName,
     color: t.color,
+    is_in_championship: t.isInChampionship,
   };
 }
 
@@ -71,6 +73,7 @@ function AdminSquadre() {
       slug: slug.trim() || null,
       short_name: short_name.trim() || null,
       color: color || null,
+      is_in_championship: editor.draft.is_in_championship,
     };
     const res = editor.mode === "create"
       ? await createTeam(payload)
@@ -156,6 +159,11 @@ function TeamRow({
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm truncate">{team.name}</span>
+          {!team.isInChampionship && (
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-muted text-muted-foreground rounded px-1.5 py-0.5">
+              Evento
+            </span>
+          )}
           <span
             className="shrink-0 inline-flex items-center justify-center text-[10px] font-black rounded px-1.5 py-0.5"
             style={{ background: team.color, color: team.accent }}
@@ -286,6 +294,35 @@ function EditorDrawer({
               Il colore di contrasto per i badge viene calcolato automaticamente.
             </p>
           </Field>
+
+          {/* Championship toggle */}
+          <button
+            type="button"
+            onClick={() => update({ is_in_championship: !d.is_in_championship })}
+            className={`w-full flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm transition-colors ${
+              d.is_in_championship
+                ? "border-primary/40 bg-primary/6 text-foreground"
+                : "border-border bg-muted/40 text-muted-foreground"
+            }`}
+          >
+            <div className="text-left">
+              <div className="font-semibold">
+                {d.is_in_championship ? "Squadra in campionato" : "Squadra fuori campionato"}
+              </div>
+              <div className="text-[11px] mt-0.5">
+                {d.is_in_championship
+                  ? "Conta in classifica e nelle statistiche."
+                  : "Solo partite evento — non altera classifica né statistiche."}
+              </div>
+            </div>
+            <div
+              className={`w-10 h-6 rounded-full flex items-center shrink-0 transition-colors px-0.5 ${
+                d.is_in_championship ? "bg-primary justify-end" : "bg-muted-foreground/30 justify-start"
+              }`}
+            >
+              <div className="w-5 h-5 rounded-full bg-white shadow" />
+            </div>
+          </button>
         </div>
 
         <div className="sticky bottom-0 bg-card border-t p-3 flex gap-2">

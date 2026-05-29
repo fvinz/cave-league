@@ -40,8 +40,8 @@ function CountdownUnit({ value, label }: { value: number; label: string }) {
         className="rounded-xl text-center w-[62px] sm:w-[82px] py-3 sm:py-5"
         style={{
           background: "oklch(0.22 0.035 40 / 0.85)",
-          border: "1px solid oklch(0.72 0.25 43 / 0.4)",
-          boxShadow: "0 0 24px oklch(0.72 0.25 43 / 0.12), inset 0 1px 0 oklch(1 0 0 / 0.06)",
+          border: "1px solid oklch(0.75 0.20 42 / 0.4)",
+          boxShadow: "0 0 24px oklch(0.75 0.20 42 / 0.12), inset 0 1px 0 oklch(1 0 0 / 0.06)",
         }}
       >
         <span className="text-[2.25rem] sm:text-5xl font-black tabular-nums leading-none text-white">
@@ -78,14 +78,14 @@ function Countdown() {
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "radial-gradient(ellipse 80% 60% at 50% 120%, oklch(0.62 0.23 43 / 0.42) 0%, transparent 65%)",
+          background: "radial-gradient(ellipse 80% 60% at 50% 120%, oklch(0.65 0.175 42 / 0.42) 0%, transparent 65%)",
         }}
       />
       {/* top-edge accent line */}
       <div
         className="absolute top-0 left-0 right-0 h-px pointer-events-none"
         style={{
-          background: "linear-gradient(90deg, transparent 0%, oklch(0.72 0.25 43 / 0.55) 50%, transparent 100%)",
+          background: "linear-gradient(90deg, transparent 0%, oklch(0.75 0.20 42 / 0.55) 50%, transparent 100%)",
         }}
       />
 

@@ -28,6 +28,7 @@ export interface Team {
   shortName: string;
   color: string;
   accent: string;
+  isInChampionship: boolean;
 }
 
 export interface MatchEvent {
@@ -203,6 +204,7 @@ export async function loadAll(): Promise<void> {
         id: t.id, slug: t.slug ?? null, name: t.name,
         shortName: t.short_name ?? deriveShortName(t.name),
         color, accent: t.color ? colorToAccent(t.color) : pal.accent,
+        isInChampionship: t.is_in_championship ?? true,
       };
     });
 
@@ -313,7 +315,9 @@ export function getMatch(id: string): Match | undefined { return matches.find(m 
 // ============= DERIVED: STANDINGS =============
 export function computeStandings(): Standing[] {
   const map = new Map<string, Standing>();
-  teams.forEach(t => map.set(t.id, {
+  // Only championship teams appear in standings; matches involving non-championship
+  // teams are automatically skipped by the `!h || !a` guard below.
+  teams.filter(t => t.isInChampionship).forEach(t => map.set(t.id, {
     teamId: t.id, played: 0, winsReg: 0, winsShoot: 0,
     lossesShoot: 0, lossesReg: 0, goalsFor: 0, goalsAgainst: 0, points: 0,
   }));
@@ -348,6 +352,14 @@ export function computeStandings(): Standing[] {
   });
 }
 
+// Returns true when both teams in a match are in the championship.
+// Used to exclude event/exhibition matches from standings and player stats.
+function isChampionshipMatch(m: Match): boolean {
+  const home = getTeam(m.homeTeamId);
+  const away = getTeam(m.awayTeamId);
+  return (home?.isInChampionship ?? false) && (away?.isInChampionship ?? false);
+}
+
 // ============= DERIVED: PLAYER STATS =============
 export interface PlayerStats {
   appearances: number;
@@ -364,12 +376,14 @@ export function getPlayerStats(playerId: string): PlayerStats {
 
   const teamMatches = matches.filter(
     m => (m.homeTeamId === player.teamId || m.awayTeamId === player.teamId) &&
-         (m.status === "finished" || m.status === "live" || m.status === "locked")
+         (m.status === "finished" || m.status === "live" || m.status === "locked") &&
+         isChampionshipMatch(m)
   );
 
   let goals = 0, ownGoals = 0, cleanSheets = 0, yellowCards = 0, redCards = 0;
   for (const m of matches) {
     if (m.status !== "finished" && m.status !== "locked") continue;
+    if (!isChampionshipMatch(m)) continue;
     for (const ev of m.events) {
       if (ev.playerId !== playerId) continue;
       if (ev.type === "goal" || ev.type === "double_goal" || ev.type === "shootout_goal") goals++;
@@ -711,12 +725,12 @@ export async function upsertPlayers(rows: { full_name: string; team_id: string; 
 }
 
 // ============= TEAM CRUD =============
-export async function createTeam(data: { name: string; slug?: string | null; short_name?: string | null; color?: string | null }): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function createTeam(data: { name: string; slug?: string | null; short_name?: string | null; color?: string | null; is_in_championship?: boolean }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { error } = await supabase.from("teams").insert(data);
   if (error) return { ok: false, error: error.message };
   await reloadAll(); return { ok: true };
 }
-export async function updateTeam(id: string, patch: { name?: string; slug?: string | null; short_name?: string | null; color?: string | null }): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function updateTeam(id: string, patch: { name?: string; slug?: string | null; short_name?: string | null; color?: string | null; is_in_championship?: boolean }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { error } = await supabase.from("teams").update(patch).eq("id", id);
   if (error) return { ok: false, error: error.message };
   await reloadAll(); return { ok: true };

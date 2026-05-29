@@ -416,6 +416,7 @@ export type Database = {
           slug: string | null
           short_name: string | null
           color: string | null
+          is_in_championship: boolean
         }
         Insert: {
           created_at?: string
@@ -424,6 +425,7 @@ export type Database = {
           slug?: string | null
           short_name?: string | null
           color?: string | null
+          is_in_championship?: boolean
         }
         Update: {
           created_at?: string
@@ -432,6 +434,7 @@ export type Database = {
           slug?: string | null
           short_name?: string | null
           color?: string | null
+          is_in_championship?: boolean
         }
         Relationships: []
       }
