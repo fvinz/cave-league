@@ -218,11 +218,13 @@ function HomePage() {
           </div>
 
           {/* Right / bottom: logo pair — horizontal, prominent */}
-          <HeroBrandLogos
-            clSize="h-24 w-24 sm:h-44 sm:w-44"
-            labSize="h-20 w-20 sm:h-36 sm:w-36"
-            gap="gap-3 sm:gap-6"
-          />
+          <div className="flex justify-center sm:block">
+            <HeroBrandLogos
+              clSize="h-24 w-24 sm:h-44 sm:w-44"
+              labSize="h-20 w-20 sm:h-36 sm:w-36"
+              gap="gap-3 sm:gap-6"
+            />
+          </div>
         </div>
 
         <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />

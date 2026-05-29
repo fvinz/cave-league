@@ -1,0 +1,9 @@
+{
+  "installCommand": "bun install",
+  "buildCommand": "bun run build:vercel",
+  "outputDirectory": ".vercel/output",
+  "env": {
+    "SUPABASE_URL": "https://kjzgqxwgfwuofsphkdej.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqemdxeHdnZnd1b2ZzcGhrZGVqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MDM5MTUsImV4cCI6MjA5NTE3OTkxNX0.HMXSuSf1W0DWta3wutQ2BoN1oY5-vNVRiwW9B0ELu2Y"
+  }
+}
