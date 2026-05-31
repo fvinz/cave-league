@@ -48,8 +48,8 @@
   --popover: oklch(0.998 0.004 55);
   --popover-foreground: oklch(0.12 0.025 40);
 
-  /* Cave League primary — #e3632c */
-  --primary: oklch(0.65 0.175 42);
+  /* Cave League primary — #d57402 */
+  --primary: oklch(0.655 0.157 58);
   --primary-foreground: oklch(0.99 0 0);
 
   --secondary: oklch(0.94 0.015 55);
@@ -68,8 +68,8 @@
 
   --border: oklch(0.88 0.015 55);
   --input: oklch(0.91 0.01 55);
-  --ring: oklch(0.65 0.175 42);
-  --pitch: oklch(0.30 0.06 42);        /* deep warm dark for gradient endpoints */
+  --ring: oklch(0.655 0.157 58);
+  --pitch: oklch(0.30 0.06 58);        /* deep warm dark for gradient endpoints */
 }
 
 .dark {
@@ -80,7 +80,7 @@
   --popover: oklch(0.155 0.022 40);
   --popover-foreground: oklch(0.965 0.008 60);
 
-  --primary: oklch(0.75 0.20 42);
+  --primary: oklch(0.75 0.19 58);
   --primary-foreground: oklch(0.99 0 0);
 
   --secondary: oklch(0.215 0.024 40);
@@ -99,8 +99,8 @@
 
   --border: oklch(0.255 0.025 40);
   --input: oklch(0.255 0.025 40);
-  --ring: oklch(0.75 0.20 42);
-  --pitch: oklch(0.18 0.04 42);
+  --ring: oklch(0.75 0.19 58);
+  --pitch: oklch(0.18 0.04 58);
 }
 
 @layer base {

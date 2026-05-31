@@ -39,9 +39,9 @@ function CountdownUnit({ value, label }: { value: number; label: string }) {
       <div
         className="rounded-xl text-center w-[62px] sm:w-[82px] py-3 sm:py-5"
         style={{
-          background: "oklch(0.22 0.035 40 / 0.85)",
-          border: "1px solid oklch(0.75 0.20 42 / 0.4)",
-          boxShadow: "0 0 24px oklch(0.75 0.20 42 / 0.12), inset 0 1px 0 oklch(1 0 0 / 0.06)",
+          background: "oklch(0.22 0.035 58 / 0.85)",
+          border: "1px solid oklch(0.75 0.19 58 / 0.4)",
+          boxShadow: "0 0 24px oklch(0.75 0.19 58 / 0.12), inset 0 1px 0 oklch(1 0 0 / 0.06)",
         }}
       >
         <span className="text-[2.25rem] sm:text-5xl font-black tabular-nums leading-none text-white">
@@ -71,21 +71,21 @@ function Countdown() {
     <section
       className="relative overflow-hidden rounded-2xl mb-6 px-5 pt-7 pb-8 sm:px-10 sm:pt-10 sm:pb-12 text-center text-white"
       style={{
-        background: "linear-gradient(160deg, oklch(0.155 0.03 40) 0%, oklch(0.088 0.018 38) 100%)",
+        background: "linear-gradient(160deg, oklch(0.155 0.03 58) 0%, oklch(0.088 0.018 58) 100%)",
       }}
     >
       {/* warm radial glow rising from below */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "radial-gradient(ellipse 80% 60% at 50% 120%, oklch(0.65 0.175 42 / 0.42) 0%, transparent 65%)",
+          background: "radial-gradient(ellipse 80% 60% at 50% 120%, oklch(0.655 0.157 58 / 0.42) 0%, transparent 65%)",
         }}
       />
       {/* top-edge accent line */}
       <div
         className="absolute top-0 left-0 right-0 h-px pointer-events-none"
         style={{
-          background: "linear-gradient(90deg, transparent 0%, oklch(0.75 0.20 42 / 0.55) 50%, transparent 100%)",
+          background: "linear-gradient(90deg, transparent 0%, oklch(0.75 0.19 58 / 0.55) 50%, transparent 100%)",
         }}
       />
 
@@ -174,12 +174,6 @@ function HomePage() {
   useStoreVersion();
   const standings = computeStandings().slice(0, 5);
   const scorers = topScorers(5);
-  const featured =
-    matches.find(m => m.status === "live") ??
-    matches.find(m => m.status === "scheduled" && m.highlight) ??
-    matches.find(m => m.status === "finished" && m.highlight) ??
-    matches[0];
-
   const todayStr = new Date().toDateString();
 
   const todayMatches = matches
@@ -230,18 +224,6 @@ function HomePage() {
         <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
         <div className="absolute -left-8 -top-8 w-48 h-48 rounded-full bg-white/5 blur-3xl pointer-events-none" />
       </section>
-
-      {/* Featured */}
-      {featured ? (
-        <>
-          <SectionHeader title="In evidenza" />
-          <div className="mb-2"><MatchCard match={featured} /></div>
-        </>
-      ) : (
-        <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground mb-4">
-          Il calendario verrà pubblicato a breve.
-        </div>
-      )}
 
       {/* Today */}
       <SectionHeader title="Eventi di oggi" link="/calendario" />

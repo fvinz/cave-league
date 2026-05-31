@@ -30,8 +30,8 @@ function PlayerDetail() {
   ];
 
   const cards = [
-    ...(s.yellowCards > 0 ? [{ label: "Gialli", value: s.yellowCards, color: "bg-yellow-400/15 text-yellow-700 dark:text-yellow-400" }] : []),
-    ...(s.redCards > 0    ? [{ label: "Rossi",  value: s.redCards,    color: "bg-red-500/15 text-red-600 dark:text-red-400" }] : []),
+    { label: "Gialli", value: s.yellowCards, color: "bg-yellow-400/15 text-yellow-700 dark:text-yellow-400" },
+    { label: "Rossi",  value: s.redCards,    color: "bg-red-500/15 text-red-600 dark:text-red-400" },
   ];
 
   return (
@@ -68,16 +68,14 @@ function PlayerDetail() {
       </div>
 
       {/* Cards */}
-      {cards.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          {cards.map(c => (
-            <div key={c.label} className={`rounded-xl border p-4 ${c.color}`}>
-              <div className="text-xs uppercase font-semibold tracking-wider opacity-70">{c.label}</div>
-              <div className="text-3xl font-black mt-1 tabular-nums">{c.value}</div>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        {cards.map(c => (
+          <div key={c.label} className={`rounded-xl border p-4 ${c.color}`}>
+            <div className="text-xs uppercase font-semibold tracking-wider opacity-70">{c.label}</div>
+            <div className="text-3xl font-black mt-1 tabular-nums">{c.value}</div>
+          </div>
+        ))}
+      </div>
 
       <div className="rounded-xl border bg-card p-4">
         <div className="text-xs uppercase text-muted-foreground font-semibold tracking-wider mb-1">Note</div>

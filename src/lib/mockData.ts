@@ -451,6 +451,21 @@ export function topCleanSheets(limit = 10): CleanSheetRow[] {
     .sort((a, b) => b.cleanSheets - a.cleanSheets || a.player.name.localeCompare(b.player.name))
     .slice(0, limit);
 }
+export interface CardRow { player: Player; cards: number; }
+export function topYellowCards(limit = 20): CardRow[] {
+  return players
+    .map(p => ({ player: p, cards: getPlayerStats(p.id).yellowCards }))
+    .filter(r => r.cards > 0)
+    .sort((a, b) => b.cards - a.cards || a.player.name.localeCompare(b.player.name))
+    .slice(0, limit);
+}
+export function topRedCards(limit = 20): CardRow[] {
+  return players
+    .map(p => ({ player: p, cards: getPlayerStats(p.id).redCards }))
+    .filter(r => r.cards > 0)
+    .sort((a, b) => b.cards - a.cards || a.player.name.localeCompare(b.player.name))
+    .slice(0, limit);
+}
 export function matchesOnDay(date: Date) {
   return matches.filter(m => new Date(m.date).toDateString() === date.toDateString());
 }
