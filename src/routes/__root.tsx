@@ -5,6 +5,7 @@ import {
   createRootRouteWithContext,
   useRouter,
 } from "@tanstack/react-router";
+import { Analytics } from "@vercel/analytics/react";
 import { ThemeProvider } from "@/lib/theme";
 import { AuthProvider } from "@/lib/auth";
 import { DataBoot } from "@/components/DataBoot";
@@ -83,6 +84,7 @@ function RootComponent() {
           <DataBoot />
           <Outlet />
           <Toaster position="top-center" richColors />
+          <Analytics />
         </ThemeProvider>
       </AuthProvider>
     </QueryClientProvider>
