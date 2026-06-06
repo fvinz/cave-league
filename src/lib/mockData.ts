@@ -386,7 +386,8 @@ export function getPlayerStats(playerId: string): PlayerStats {
     if (!isChampionshipMatch(m)) continue;
     for (const ev of m.events) {
       if (ev.playerId !== playerId) continue;
-      if (ev.type === "goal" || ev.type === "double_goal" || ev.type === "shootout_goal") goals++;
+      if (ev.type === "double_goal") goals += 2;
+      else if (ev.type === "goal" || ev.type === "shootout_goal") goals += 1;
       else if (ev.type === "own_goal")    ownGoals++;
       else if (ev.type === "yellow_card") yellowCards++;
       else if (ev.type === "red_card")    redCards++;
