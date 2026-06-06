@@ -18,6 +18,7 @@ import {
   startShootout,
   addMatchEvent,
   undoLastEvent,
+  deleteMatchEvent,
   finalizeMatch,
   lockMatch,
   unlockMatch,
@@ -31,7 +32,7 @@ import {
 } from "@/lib/mockData";
 import {
   Play, Square, Trophy, Shield, RotateCcw, Lock, Unlock, X,
-  CheckCircle2, RefreshCw, Undo2, Goal, AlertCircle,
+  CheckCircle2, RefreshCw, Undo2, Goal, AlertCircle, Trash2,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/partita")({
@@ -193,6 +194,12 @@ function AdminPartita() {
   const finishShootout = async (winner: "home" | "away") => {
     const r = await finalizeMatch(match.id, { type: "shootout", winner });
     r.ok ? (setConfirmClose(false), toast.success(`Vittoria ai rigori: ${winner === "home" ? home.shortName : away.shortName}`)) : toast.error(r.error);
+  };
+
+  const onDeleteEvent = async (eventId: string) => {
+    const res = await deleteMatchEvent(eventId);
+    if (!res.ok) toast.error(res.error);
+    else toast.info("Evento eliminato");
   };
 
   const onPickPlayer = async (playerId: string) => {
@@ -396,7 +403,7 @@ function AdminPartita() {
           {match.events.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-8">Nessun evento registrato.</div>
           ) : (
-            <Timeline events={[...match.events].reverse()} home={home} away={away} />
+            <Timeline events={[...match.events].reverse()} home={home} away={away} canDelete={!isLocked} onDelete={onDeleteEvent} />
           )}
         </div>
       </section>
@@ -490,11 +497,27 @@ const PERIOD_LABEL: Record<string, string> = {
   first_half: "— 1° Tempo —", second_half: "— 2° Tempo —", shootout: "— Rigori —",
 };
 
-function Timeline({ events, home, away }: {
+function Timeline({ events, home, away, canDelete, onDelete }: {
   events: Match["events"];
   home: { id: string; shortName: string };
   away: { id: string; shortName: string };
+  canDelete?: boolean;
+  onDelete?: (id: string) => Promise<void>;
 }) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+
+  async function handleDelete(id: string) {
+    if (!onDelete) return;
+    setPendingId(id);
+    try {
+      await onDelete(id);
+    } finally {
+      setPendingId(null);
+      setConfirmId(null);
+    }
+  }
+
   let lastPeriod: string | null | undefined = undefined;
   return (
     <>
@@ -504,6 +527,8 @@ function Timeline({ events, home, away }: {
         const sideTeam = ev.team === "home" ? home : away;
         const isCard = ev.type === "yellow_card" || ev.type === "red_card";
         const isMiss = ev.type === "shootout_miss";
+        const isConfirming = confirmId === ev.id;
+        const isPending = pendingId === ev.id;
         return (
           <div key={ev.id}>
             {showSep && (
@@ -518,15 +543,44 @@ function Timeline({ events, home, away }: {
                 <div className="text-sm font-semibold truncate">{getPlayer(ev.playerId)?.name ?? "—"}</div>
                 <div className="text-[11px] text-muted-foreground">{ev.label}</div>
               </div>
-              {ev.weight > 1 && (
-                <span className="text-[10px] font-bold bg-violet-500/15 text-violet-600 px-1.5 py-0.5 rounded">×{ev.weight}</span>
-              )}
-              {isCard ? (
-                <span className={`w-4 h-5 rounded-sm ${ev.type === "yellow_card" ? "bg-yellow-400" : "bg-red-600"}`} />
-              ) : isMiss ? (
-                <span className="text-xs font-black text-rose-500">✗</span>
+              {isConfirming ? (
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => setConfirmId(null)}
+                    className="px-2 py-1 text-[11px] font-semibold rounded border hover:bg-secondary"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    onClick={() => handleDelete(ev.id)}
+                    disabled={isPending}
+                    className="px-2 py-1 text-[11px] font-semibold rounded bg-destructive text-destructive-foreground disabled:opacity-50"
+                  >
+                    {isPending ? "…" : "Elimina"}
+                  </button>
+                </div>
               ) : (
-                <Goal className={`w-4 h-4 ${ev.type === "own_goal" ? "text-destructive" : ev.type === "shootout_goal" ? "text-emerald-500" : "text-primary"}`} />
+                <>
+                  {ev.weight > 1 && (
+                    <span className="text-[10px] font-bold bg-violet-500/15 text-violet-600 px-1.5 py-0.5 rounded">×{ev.weight}</span>
+                  )}
+                  {isCard ? (
+                    <span className={`w-4 h-5 rounded-sm ${ev.type === "yellow_card" ? "bg-yellow-400" : "bg-red-600"}`} />
+                  ) : isMiss ? (
+                    <span className="text-xs font-black text-rose-500">✗</span>
+                  ) : (
+                    <Goal className={`w-4 h-4 ${ev.type === "own_goal" ? "text-destructive" : ev.type === "shootout_goal" ? "text-emerald-500" : "text-primary"}`} />
+                  )}
+                  {canDelete && (
+                    <button
+                      onClick={() => setConfirmId(ev.id)}
+                      className="p-1 rounded text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      title="Elimina evento"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -536,17 +590,27 @@ function Timeline({ events, home, away }: {
   );
 }
 
+function roleLabel(role: string): string {
+  if (role === "p")    return "Portiere";
+  if (role === "pres") return "Presidente";
+  return "Giocatore";
+}
+
 function PlayerPicker({ teamId, title, subtitle, onCancel, onPick }: {
   teamId: string; title: string; subtitle?: string; onCancel: () => void; onPick: (id: string) => void;
 }) {
-  const roster = getTeamPlayers(teamId)
+  const all = getTeamPlayers(teamId);
+  const regularPlayers = all
     .filter(p => p.role !== "pres")
     .sort((a, b) => {
-      // Players without a number (number === 0) go at the end
       const na = a.number > 0 ? a.number : Infinity;
       const nb = b.number > 0 ? b.number : Infinity;
       return na - nb;
     });
+  const presidents = all
+    .filter(p => p.role === "pres")
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-foreground/40 backdrop-blur-sm" onClick={onCancel}>
       <div className="w-full sm:max-w-md bg-card border-t sm:border sm:rounded-xl shadow-xl max-h-[80vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
@@ -558,15 +622,31 @@ function PlayerPicker({ teamId, title, subtitle, onCancel, onPick }: {
           <button onClick={onCancel} className="p-1.5 rounded hover:bg-secondary"><X className="w-4 h-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto divide-y">
-          {roster.map(p => (
+          {regularPlayers.map(p => (
             <button key={p.id} onClick={() => onPick(p.id)}
               className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/40 text-left"
             >
               <span className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold tabular-nums">{p.number || "—"}</span>
               <span className="flex-1 font-semibold text-sm">{p.name}</span>
-              <span className="text-[10px] uppercase font-bold text-muted-foreground">{p.role === "p" ? "Portiere" : "Giocatore"}</span>
+              <span className="text-[10px] uppercase font-bold text-muted-foreground">{roleLabel(p.role)}</span>
             </button>
           ))}
+          {presidents.length > 0 && (
+            <>
+              <div className="px-4 py-1.5 bg-secondary/30 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Presidenti
+              </div>
+              {presidents.map(p => (
+                <button key={p.id} onClick={() => onPick(p.id)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-secondary/40 text-left"
+                >
+                  <span className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-xs font-bold">P</span>
+                  <span className="flex-1 font-semibold text-sm">{p.name}</span>
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground">Presidente</span>
+                </button>
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>

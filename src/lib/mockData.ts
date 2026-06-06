@@ -591,6 +591,13 @@ export async function undoLastEvent(matchId: string): Promise<boolean> {
   return true;
 }
 
+export async function deleteMatchEvent(eventId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await supabase.from("match_events").delete().eq("id", eventId);
+  if (error) return { ok: false, error: error.message };
+  await reloadAll();
+  return { ok: true };
+}
+
 export async function setMatchStatus(matchId: string, status: MatchStatus): Promise<boolean> {
   const m = getMatch(matchId);
   if (!m) return false;
