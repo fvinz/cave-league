@@ -599,6 +599,19 @@ export async function deleteMatchEvent(eventId: string): Promise<{ ok: true } | 
   return { ok: true };
 }
 
+export async function updateMatchEventPlayer(
+  eventId: string,
+  newPlayerId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await supabase
+    .from("match_events")
+    .update({ player_id: newPlayerId })
+    .eq("id", eventId);
+  if (error) return { ok: false, error: error.message };
+  await reloadAll();
+  return { ok: true };
+}
+
 export async function setMatchStatus(matchId: string, status: MatchStatus): Promise<boolean> {
   const m = getMatch(matchId);
   if (!m) return false;

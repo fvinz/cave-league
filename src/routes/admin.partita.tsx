@@ -19,6 +19,7 @@ import {
   addMatchEvent,
   undoLastEvent,
   deleteMatchEvent,
+  updateMatchEventPlayer,
   finalizeMatch,
   lockMatch,
   unlockMatch,
@@ -32,7 +33,7 @@ import {
 } from "@/lib/mockData";
 import {
   Play, Square, Trophy, Shield, RotateCcw, Lock, Unlock, X,
-  CheckCircle2, RefreshCw, Undo2, Goal, AlertCircle, Trash2,
+  CheckCircle2, RefreshCw, Undo2, Goal, AlertCircle, Trash2, Pencil,
 } from "lucide-react";
 
 export const Route = createFileRoute("/admin/partita")({
@@ -99,6 +100,7 @@ function AdminPartita() {
   const match = playable.find(m => m.id === selectedId) ?? initial ?? null;
   const [activeSide, setActiveSide] = useState<"home" | "away">("home");
   const [pickerEvent, setPickerEvent] = useState<(QuickEvent & { side: "home" | "away" }) | null>(null);
+  const [editingEvent, setEditingEvent] = useState<{ id: string; teamId: string } | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmLock, setConfirmLock] = useState(false);
 
@@ -200,6 +202,16 @@ function AdminPartita() {
     const res = await deleteMatchEvent(eventId);
     if (!res.ok) toast.error(res.error);
     else toast.info("Evento eliminato");
+  };
+
+  const onEditRequest = (eventId: string, teamId: string) => setEditingEvent({ id: eventId, teamId });
+
+  const onEditPick = async (newPlayerId: string) => {
+    if (!editingEvent) return;
+    const res = await updateMatchEventPlayer(editingEvent.id, newPlayerId);
+    if (!res.ok) toast.error(res.error);
+    else toast.success("Evento aggiornato", { description: getPlayer(newPlayerId)?.name });
+    setEditingEvent(null);
   };
 
   const onPickPlayer = async (playerId: string) => {
@@ -403,7 +415,7 @@ function AdminPartita() {
           {match.events.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-8">Nessun evento registrato.</div>
           ) : (
-            <Timeline events={[...match.events].reverse()} home={home} away={away} canDelete={!isLocked} onDelete={onDeleteEvent} />
+            <Timeline events={[...match.events].reverse()} home={home} away={away} canDelete={!isLocked} onDelete={onDeleteEvent} onEditRequest={!isLocked ? onEditRequest : undefined} />
           )}
         </div>
       </section>
@@ -432,6 +444,16 @@ function AdminPartita() {
           subtitle={pickerEvent.type === "own_goal" ? `Autogoal — il punto va a ${(pickerEvent.side === "home" ? away : home).shortName}` : undefined}
           onCancel={() => setPickerEvent(null)}
           onPick={onPickPlayer}
+        />
+      )}
+
+      {editingEvent && (
+        <PlayerPicker
+          teamId={editingEvent.teamId}
+          title={`Modifica evento · ${getTeam(editingEvent.teamId)?.shortName ?? "—"}`}
+          subtitle="Seleziona il nuovo protagonista dell'evento"
+          onCancel={() => setEditingEvent(null)}
+          onPick={onEditPick}
         />
       )}
 
@@ -497,12 +519,13 @@ const PERIOD_LABEL: Record<string, string> = {
   first_half: "— 1° Tempo —", second_half: "— 2° Tempo —", shootout: "— Rigori —",
 };
 
-function Timeline({ events, home, away, canDelete, onDelete }: {
+function Timeline({ events, home, away, canDelete, onDelete, onEditRequest }: {
   events: Match["events"];
   home: { id: string; shortName: string };
   away: { id: string; shortName: string };
   canDelete?: boolean;
   onDelete?: (id: string) => Promise<void>;
+  onEditRequest?: (eventId: string, teamId: string) => void;
 }) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -570,6 +593,15 @@ function Timeline({ events, home, away, canDelete, onDelete }: {
                     <span className="text-xs font-black text-rose-500">✗</span>
                   ) : (
                     <Goal className={`w-4 h-4 ${ev.type === "own_goal" ? "text-destructive" : ev.type === "shootout_goal" ? "text-emerald-500" : "text-primary"}`} />
+                  )}
+                  {onEditRequest && (
+                    <button
+                      onClick={() => onEditRequest(ev.id, sideTeam.id)}
+                      className="p-1 rounded text-muted-foreground/40 hover:text-primary hover:bg-primary/10 transition-colors"
+                      title="Modifica protagonista"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
                   )}
                   {canDelete && (
                     <button
