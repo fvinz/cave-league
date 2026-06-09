@@ -321,30 +321,42 @@ export function computeStandings(): Standing[] {
     teamId: t.id, played: 0, winsReg: 0, winsShoot: 0,
     lossesShoot: 0, lossesReg: 0, goalsFor: 0, goalsAgainst: 0, points: 0,
   }));
-  matches
-    .filter(m =>
-      m.phase === "regular" && (m.status === "finished" || m.status === "locked") &&
-      m.homeTeamId && m.awayTeamId
-    )
-    .forEach(m => {
-      const h = map.get(m.homeTeamId!); const a = map.get(m.awayTeamId!);
-      if (!h || !a) return;
-      const hs = m.homeScore ?? 0; const as_ = m.awayScore ?? 0;
-      h.played++; a.played++;
-      h.goalsFor += hs; h.goalsAgainst += as_;
-      a.goalsFor += as_; a.goalsAgainst += hs;
-      // Use result_type to determine outcome, not raw score (shootout_goals shift the score)
-      if (m.resultType === "shootout") {
-        const homeWon = m.shootoutWinner === "home";
-        if (homeWon) { h.winsShoot++; h.points += 2; a.lossesShoot++; a.points += 1; }
-        else         { a.winsShoot++; a.points += 2; h.lossesShoot++; h.points += 1; }
-      } else {
-        if (hs > as_)      { h.winsReg++; h.points += 3; a.lossesReg++; }
-        else if (as_ > hs) { a.winsReg++; a.points += 3; h.lossesReg++; }
-      }
-    });
+
+  // key: sorted "idA|idB", value: winner teamId (undefined if draw with no shootout)
+  const h2h = new Map<string, string>();
+
+  const leagueMatches = matches.filter(m =>
+    m.phase === "regular" && (m.status === "finished" || m.status === "locked") &&
+    m.homeTeamId && m.awayTeamId
+  );
+
+  leagueMatches.forEach(m => {
+    const h = map.get(m.homeTeamId!); const a = map.get(m.awayTeamId!);
+    if (!h || !a) return;
+    const hs = m.homeScore ?? 0; const as_ = m.awayScore ?? 0;
+    h.played++; a.played++;
+    h.goalsFor += hs; h.goalsAgainst += as_;
+    a.goalsFor += as_; a.goalsAgainst += hs;
+    const h2hKey = [m.homeTeamId!, m.awayTeamId!].sort().join("|");
+    // Use result_type to determine outcome, not raw score (shootout_goals shift the score)
+    if (m.resultType === "shootout") {
+      const homeWon = m.shootoutWinner === "home";
+      if (homeWon) { h.winsShoot++; h.points += 2; a.lossesShoot++; a.points += 1; }
+      else         { a.winsShoot++; a.points += 2; h.lossesShoot++; h.points += 1; }
+      h2h.set(h2hKey, homeWon ? m.homeTeamId! : m.awayTeamId!);
+    } else {
+      if (hs > as_)      { h.winsReg++; h.points += 3; a.lossesReg++; h2h.set(h2hKey, m.homeTeamId!); }
+      else if (as_ > hs) { a.winsReg++; a.points += 3; h.lossesReg++; h2h.set(h2hKey, m.awayTeamId!); }
+    }
+  });
+
   return [...map.values()].sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
+    // Head-to-head: if the two teams have met, the match winner ranks higher.
+    // Falls through to goal difference if they have not played each other yet.
+    const winner = h2h.get([a.teamId, b.teamId].sort().join("|"));
+    if (winner === a.teamId) return -1;
+    if (winner === b.teamId) return  1;
     const dA = a.goalsFor - a.goalsAgainst; const dB = b.goalsFor - b.goalsAgainst;
     if (dB !== dA) return dB - dA;
     if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
