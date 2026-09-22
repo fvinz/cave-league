@@ -7,10 +7,7 @@ import {
 } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
 import { ThemeProvider } from "@/lib/theme";
-import { AuthProvider } from "@/lib/auth";
-import { DataBoot } from "@/components/DataBoot";
 import { Toaster } from "@/components/ui/sonner";
-import { useStoreVersion, isLoaded } from "@/lib/mockData";
 
 function NotFoundComponent() {
   return (
@@ -77,25 +74,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  // Subscribe to store so this component re-renders when loadAll() completes.
-  useStoreVersion();
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ThemeProvider>
-          <DataBoot />
-          {isLoaded() ? (
-            <Outlet />
-          ) : (
-            <div className="flex min-h-screen items-center justify-center bg-background">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            </div>
-          )}
-          <Toaster position="top-center" richColors />
-          <Analytics />
-        </ThemeProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <Outlet />
+        <Toaster position="top-center" richColors />
+        <Analytics />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

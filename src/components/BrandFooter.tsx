@@ -1,5 +1,4 @@
-import { Link } from "@tanstack/react-router";
-import { Moon, Sun, Shield } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import clBlack from "@/assets/logos/cl-black.png";
 import clWhite from "@/assets/logos/cl-white.png";
@@ -9,7 +8,7 @@ import cavelabWhite from "@/assets/logos/cavelab-white.png";
 interface BrandFooterProps {
   /** Tighter sizing for admin panels */
   compact?: boolean;
-  /** Show theme toggle + admin link between logos on mobile */
+  /** Show theme toggle between logos on mobile */
   showMobileControls?: boolean;
 }
 
@@ -40,7 +39,7 @@ export function BrandFooter({ compact = false, showMobileControls = false }: Bra
         />
       </div>
 
-      {/* Mobile-only: Light + Admin between logos */}
+      {/* Mobile-only: theme toggle between logos */}
       {showMobileControls && (
         <div className="flex items-center gap-6 md:hidden">
           <button
@@ -53,14 +52,6 @@ export function BrandFooter({ compact = false, showMobileControls = false }: Bra
               {theme === "dark" ? "Light" : "Dark"}
             </span>
           </button>
-          <Link
-            to="/admin"
-            className="flex flex-col items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Admin"
-          >
-            <Shield className="w-5 h-5" />
-            <span className="text-[10px] font-semibold uppercase tracking-wide">Admin</span>
-          </Link>
         </div>
       )}
 

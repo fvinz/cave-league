@@ -1,19 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { MatchCard } from "@/components/MatchCard";
 import { TeamBadge } from "@/components/TeamBadge";
 import { SectionHeader } from "@/components/SectionHeader";
-import {
-  computeStandings, getTeam, matches, calendarEvents,
-  topScorers, useStoreVersion,
-  type CalendarEvent,
-} from "@/lib/mockData";
-import { Calendar, Trophy, Zap, Star } from "lucide-react";
+import { getFinalPodium, getTeam, topScorers, type PodiumResult, type ScorerRow } from "@/lib/mockData";
+import { Calendar, Trophy, Zap } from "lucide-react";
 import clBlack from "@/assets/logos/cl-black.png";
 import clWhite from "@/assets/logos/cl-white.png";
 import cavelabBlack from "@/assets/logos/cavelab-black.png";
 import cavelabWhite from "@/assets/logos/cavelab-white.png";
+
+// Le foto della finalissima vivono in public/finale/ e vanno riferite con
+// percorso assoluto: BASE_URL è "/" in dev standalone ma "/league/" quando
+// l'app è innestata sotto il sito principale (vedi router.tsx).
+const withBase = (path: string) => `${import.meta.env.BASE_URL}${path}`;
 
 // ── Countdown target: Friday 5 June 2026, 19:00 CEST (Italy = UTC+2 in summer)
 const COUNTDOWN_TARGET = new Date("2026-06-05T19:00:00+02:00");
@@ -128,28 +128,6 @@ function Countdown() {
   );
 }
 
-// ── simple event card for non-match calendar items ────────────────────────────
-function TodayEventCard({ event }: { event: CalendarEvent }) {
-  return (
-    <div className="rounded-xl border bg-card p-3 sm:p-4 flex items-start gap-3 hover:border-primary/40 transition-colors">
-      <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 mt-0.5">
-        <Star className="w-4 h-4 text-accent-foreground" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <div className="font-semibold text-sm">{event.title}</div>
-          {event.startTime && (
-            <span className="text-xs text-muted-foreground shrink-0">{event.startTime}</span>
-          )}
-        </div>
-        {event.description && (
-          <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{event.description}</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── brand logo pair for the hero banner ──────────────────────────────────────
 function HeroBrandLogos({ clSize, labSize, gap = "gap-4" }: {
   clSize: string; labSize: string; gap?: string;
@@ -164,6 +142,154 @@ function HeroBrandLogos({ clSize, labSize, gap = "gap-4" }: {
   );
 }
 
+// ── podium row inside the results hero — sfondo pieno (non più un velo sulla
+// foto) perché l'informazione deve leggersi al primo sguardo, non dedotta ──
+function PodiumRow({
+  rank, label, team, score, highlight,
+}: { rank: number; label: string; team: { name: string }; score?: string; highlight?: boolean }) {
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-xl px-4 backdrop-blur-sm ${highlight ? "py-3.5" : "py-3"}`}
+      style={
+        highlight
+          ? { background: "oklch(0.70 0.20 72 / 0.94)", boxShadow: "0 4px 18px oklch(0 0 0 / 0.35)" }
+          : { background: "oklch(0.14 0.02 58 / 0.82)", border: "1px solid oklch(1 0 0 / 0.14)" }
+      }
+    >
+      {highlight ? (
+        <Trophy className="w-7 h-7 shrink-0" style={{ color: "oklch(0.16 0.03 58)" }} />
+      ) : (
+        <span className="w-7 text-center font-black text-white/55 text-lg shrink-0">{rank}</span>
+      )}
+      <div className="min-w-0 flex-1">
+        <div
+          className="text-[10px] font-bold uppercase tracking-widest"
+          style={{ color: highlight ? "oklch(0.20 0.04 58 / 0.75)" : "rgba(255,255,255,0.55)" }}
+        >
+          {label}
+        </div>
+        <div
+          className={`font-black truncate ${highlight ? "text-xl sm:text-2xl" : "text-base sm:text-lg"}`}
+          style={{ color: highlight ? "oklch(0.14 0.03 58)" : "#fff" }}
+        >
+          {team.name}
+        </div>
+      </div>
+      {score && (
+        <div
+          className="text-sm font-bold shrink-0 tabular-nums"
+          style={{ color: highlight ? "oklch(0.20 0.04 58 / 0.8)" : "rgba(255,255,255,0.6)" }}
+        >
+          {score}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── capocannoniere: riquadro a parte, ancora più evidente del podio ──────────
+function TopScorerCallout({ scorer }: { scorer: ScorerRow }) {
+  const team = getTeam(scorer.player.teamId);
+  return (
+    <div
+      className="mt-3 flex items-center gap-3 rounded-xl px-4 py-3.5 backdrop-blur-sm"
+      style={{ background: "oklch(0.63 0.21 35 / 0.94)", boxShadow: "0 4px 18px oklch(0 0 0 / 0.35)" }}
+    >
+      <Zap className="w-7 h-7 shrink-0" style={{ color: "oklch(0.16 0.03 35)" }} />
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] font-bold uppercase tracking-widest" style={{ color: "oklch(0.20 0.04 35 / 0.75)" }}>
+          Capocannoniere del torneo
+        </div>
+        <div className="font-black text-xl sm:text-2xl truncate" style={{ color: "oklch(0.14 0.03 35)" }}>
+          {scorer.player.name}
+        </div>
+        {team && <div className="text-xs font-semibold truncate" style={{ color: "oklch(0.20 0.04 35 / 0.75)" }}>{team.name}</div>}
+      </div>
+      <div className="text-3xl sm:text-4xl font-black tabular-nums shrink-0 leading-none" style={{ color: "oklch(0.14 0.03 35)" }}>
+        {scorer.goals}
+        <span className="block text-[9px] font-bold tracking-widest text-center mt-0.5" style={{ color: "oklch(0.20 0.04 35 / 0.7)" }}>
+          GOL
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── results hero — l'unico contenuto della home: podio + sfondo cinematico
+// (l'alzata della coppa di Real Madrink alla Super Bowl Night) ───────────────
+function ResultsHero({ podium, topScorer }: { podium: PodiumResult; topScorer?: ScorerRow }) {
+  return (
+    <section className="relative overflow-hidden rounded-2xl mb-6 text-white">
+      <img
+        src={withBase("finale/hero-trofeo.jpg")}
+        alt="Real Madrink alza la coppa della Cave League 2026 tra fuochi d'artificio e coriandoli dorati"
+        width={1600}
+        height={1067}
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+      {/* Velo pieno su tutta l'immagine, non solo in basso: le card sotto
+          sono già opache di loro, ma il testo del titolo poggia solo sul
+          velo e deve restare leggibile ovunque, non solo vicino al bordo. */}
+      <div className="absolute inset-0" style={{ background: "oklch(0.06 0.02 58 / 0.55)" }} />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to top, oklch(0.05 0.02 58 / 0.98) 0%, oklch(0.06 0.02 58 / 0.9) 38%, oklch(0.08 0.02 58 / 0.55) 68%, oklch(0.10 0.03 58 / 0.25) 100%)",
+        }}
+      />
+      <div className="relative z-10 p-5 sm:p-8 pt-8 sm:pt-12">
+        <div className="text-xs sm:text-sm uppercase tracking-[0.2em] font-bold text-white/75">
+          5 – 14 Giugno 2026 · Cave · Torneo concluso
+        </div>
+        <h1 className="text-4xl sm:text-6xl font-black mt-2 leading-none">L'albo d'oro 2026</h1>
+        <p className="mt-3 max-w-lg text-white/85 text-sm sm:text-base font-medium">
+          Dieci giorni di partite, l'Anfiteatro pieno e la Super Bowl Night finale: ecco come è andata a finire.
+        </p>
+
+        <div className="mt-7 grid gap-2.5 max-w-md">
+          <PodiumRow rank={1} label="Campione" team={podium.champion} score={podium.finalScore} highlight />
+          <PodiumRow rank={2} label="Finalista" team={podium.runnerUp} />
+          {podium.third && <PodiumRow rank={3} label="Terzo posto" team={podium.third} score={podium.thirdScore} />}
+          {topScorer && <TopScorerCallout scorer={topScorer} />}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── foto della finalissima (Drive associazione, cartella CaveLeague 2K26 ›
+// DAY 10 › Finalissima) ───────────────────────────────────────────────────────
+const FINALE_PHOTOS = [
+  "finale-1.jpg", "finale-48.jpg", "finale-5.jpg", "finale-41.jpg",
+  "finale-9.jpg", "finale-13.jpg", "finale-17.jpg", "finale-45.jpg",
+].map(file => withBase(`finale/${file}`));
+
+function FinalePhotos() {
+  return (
+    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+      {FINALE_PHOTOS.map(src => (
+        <a
+          key={src}
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block aspect-4/3 rounded-lg overflow-hidden border group"
+        >
+          <img
+            src={src}
+            alt="Un momento della finalissima Cave League 2026"
+            loading="lazy"
+            width={1000}
+            height={750}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        </a>
+      ))}
+    </div>
+  );
+}
+
 // ── page ──────────────────────────────────────────────────────────────────────
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -171,27 +297,21 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
-  useStoreVersion();
-  const standings = computeStandings().slice(0, 5);
+  const podium = getFinalPodium();
   const scorers = topScorers(5);
-  const todayStr = new Date().toDateString();
-
-  const todayMatches = matches
-    .filter(m => new Date(m.date).toDateString() === todayStr)
-    .sort((a, b) => +new Date(a.date) - +new Date(b.date));
-
-  const todayCalEvents = calendarEvents
-    .filter(e => new Date(e.date + "T00:00:00").toDateString() === todayStr)
-    .sort((a, b) => (a.startTime ?? "").localeCompare(b.startTime ?? ""));
-
-  const hasToday = todayMatches.length > 0 || todayCalEvents.length > 0;
 
   return (
     <AppShell>
+      {/* Torneo concluso: podio della finalissima al posto del countdown
+          pre-evento. Finché la finale non è segnata come giocata, la home
+          resta nella modalità "hype" di prima. */}
+      {podium && <ResultsHero podium={podium} topScorer={scorers[0]} />}
+
       {/* Countdown — FIRST, disappears automatically when target is reached */}
-      <Countdown />
+      {!podium && <Countdown />}
 
       {/* Hero */}
+      {!podium && (
       <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-pitch text-primary-foreground p-5 sm:p-8 mb-6">
         {/* Two-column layout: text left, logos right */}
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-6 sm:gap-10">
@@ -201,14 +321,6 @@ function HomePage() {
             <div className="text-xs uppercase tracking-widest opacity-70 font-bold">5 — 14 Giugno 2026 · Cave</div>
             <h1 className="text-4xl sm:text-6xl font-black mt-2 leading-none">CAVE LEAGUE</h1>
             <p className="mt-3 max-w-md opacity-80 text-sm sm:text-base">Il torneo che incendia l'estate. Stile Kings League, cuore di Cave.</p>
-            <div className="flex flex-wrap gap-2 mt-5">
-              <Link to="/calendario" className="bg-white/15 backdrop-blur border border-white/25 px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-1.5 hover:bg-white/25 transition-colors">
-                <Calendar className="w-4 h-4" /> Calendario
-              </Link>
-              <Link to="/classifica" className="bg-white/10 backdrop-blur px-4 py-2 rounded-lg text-sm font-semibold border border-white/15 inline-flex items-center gap-1.5 hover:bg-white/20 transition-colors">
-                <Trophy className="w-4 h-4" /> Classifica
-              </Link>
-            </div>
           </div>
 
           {/* Right / bottom: logo pair — horizontal, prominent */}
@@ -224,63 +336,35 @@ function HomePage() {
         <div className="absolute -right-12 -bottom-12 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
         <div className="absolute -left-8 -top-8 w-48 h-48 rounded-full bg-white/5 blur-3xl pointer-events-none" />
       </section>
+      )}
 
-      {/* Today */}
-      <SectionHeader title="Eventi di oggi" link="/calendario" />
-      <div className="grid gap-2 mb-6">
-        {!hasToday ? (
-          <div className="text-sm text-muted-foreground rounded-xl border border-dashed p-6 text-center">
-            Nessun evento oggi.
-          </div>
-        ) : (
-          <>
-            {todayMatches.map(m => <MatchCard key={m.id} match={m} />)}
-            {todayCalEvents.map(e => <TodayEventCard key={e.id} event={e} />)}
-          </>
-        )}
-      </div>
-
-      {/* Two col */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <div>
-          <SectionHeader title="Top 5 squadre" link="/classifica" />
-          <div className="rounded-xl border bg-card overflow-hidden">
-            {standings.length === 0 ? (
-              <div className="text-sm text-muted-foreground text-center py-6">Nessuna squadra ancora.</div>
-            ) : standings.map((s, i) => {
-              const t = getTeam(s.teamId);
-              if (!t) return null;
-              return (
-                <Link to="/squadre/$teamId" params={{ teamId: t.id }} key={s.teamId} className="flex items-center gap-3 px-3 py-2.5 border-b last:border-0 hover:bg-secondary/50">
-                  <span className="w-6 text-center font-bold text-muted-foreground text-sm">{i + 1}</span>
-                  <TeamBadge teamId={t.id} size={28} />
-                  <span className="font-semibold flex-1 truncate text-sm">{t.name}</span>
-                  <span className="font-bold tabular-nums text-primary">{s.points}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-
-        <div>
-          <SectionHeader title="Top 5 marcatori" link="/statistiche" />
-          <div className="rounded-xl border bg-card overflow-hidden">
-            {scorers.length === 0 ? (
-              <div className="text-sm text-muted-foreground text-center py-6">Nessun goal ancora.</div>
-            ) : scorers.map((row, i) => (
-              <Link to="/giocatori/$playerId" params={{ playerId: row.player.id }} key={row.player.id} className="flex items-center gap-3 px-3 py-2.5 border-b last:border-0 hover:bg-secondary/50">
-                <span className="w-6 text-center font-bold text-muted-foreground text-sm">{i + 1}</span>
-                <TeamBadge teamId={row.player.teamId} size={24} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold truncate text-sm">{row.player.name}</div>
-                  <div className="text-xs text-muted-foreground">{getTeam(row.player.teamId)?.shortName}</div>
-                </div>
-                <span className="font-bold tabular-nums text-accent flex items-center gap-1"><Zap className="w-3.5 h-3.5" />{row.goals}</span>
-              </Link>
-            ))}
-          </div>
+      {/* Marcatori: unica lista rimasta perché è l'unica completa per quello
+          che dichiara di essere (i primi 5, non "tutti"). */}
+      <div className="max-w-md">
+        <SectionHeader title="Top 5 marcatori" />
+        <div className="rounded-xl border bg-card overflow-hidden">
+          {scorers.length === 0 ? (
+            <div className="text-sm text-muted-foreground text-center py-6">Nessun goal ancora.</div>
+          ) : scorers.map((row, i) => (
+            <div key={row.player.id} className="flex items-center gap-3 px-3 py-2.5 border-b last:border-0">
+              <span className="w-6 text-center font-bold text-muted-foreground text-sm">{i + 1}</span>
+              <TeamBadge teamId={row.player.teamId} size={24} />
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold truncate text-sm">{row.player.name}</div>
+                <div className="text-xs text-muted-foreground">{getTeam(row.player.teamId)?.shortName}</div>
+              </div>
+              <span className="font-bold tabular-nums text-accent flex items-center gap-1"><Zap className="w-3.5 h-3.5" />{row.goals}</span>
+            </div>
+          ))}
         </div>
       </div>
+
+      {podium && (
+        <div className="mt-6">
+          <SectionHeader title="La finalissima in foto" />
+          <FinalePhotos />
+        </div>
+      )}
     </AppShell>
   );
 }

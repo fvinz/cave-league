@@ -10,6 +10,8 @@ export const getRouter = () => {
     context: { queryClient },
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
+    // Consente di montare l'app sotto un sotto-percorso (es. /league/)
+    basepath: import.meta.env.BASE_URL,
   });
 
   return router;
